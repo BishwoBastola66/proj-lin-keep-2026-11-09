@@ -1,0 +1,7 @@
+use web
+page Gallery:
+    title "Space Adventures"
+    text "Photos from the James Webb Space Telescope"
+    image "https://images.rubix.dev/mars.jpg", "Mars Rover"
+    button "Explore Next" -> slide = "Jupiter"
+start Gallery

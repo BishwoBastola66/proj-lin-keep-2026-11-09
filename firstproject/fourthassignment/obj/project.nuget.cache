@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "ZYwzlI7JTj8=",
+  "success": true,
+  "projectFilePath": "/home/bishwaxyz/firstproject/fourthassignment/fourthassignment.csproj",
+  "expectedPackageFiles": [
+    "/home/bishwaxyz/.nuget/packages/microsoft.aspnetcore.app.ref/10.0.13/microsoft.aspnetcore.app.ref.10.0.13.nupkg.sha512"
+  ],
+  "logs": []
+}

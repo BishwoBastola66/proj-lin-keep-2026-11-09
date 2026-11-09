@@ -1,0 +1,40 @@
+# ==============================================================================
+# Rubix Library API: Search Route (/v1/search)
+# File: library/api/src/routes/search.bix
+# ==============================================================================
+
+use std.core;
+use std.string;
+use std.json;
+
+fn api_handle_search(query: str, category: str): str {
+    let lb = json_lbrace();
+    let rb = json_rbrace();
+
+    let p1 = lb + json_build_pair("name", json_encode_str("collections")) + "," +
+                  json_build_pair("version", json_encode_str("1.0.0")) + "," +
+                  json_build_pair("description", json_encode_str("High-performance collections for Rubix")) + "," +
+                  json_build_pair("category", json_encode_str("data")) + "," +
+                  json_build_pair("ai_verdict", json_encode_str("clean")) + rb;
+
+    let p2 = lb + json_build_pair("name", json_encode_str("webbix-core")) + "," +
+                  json_build_pair("version", json_encode_str("1.0.0")) + "," +
+                  json_build_pair("description", json_encode_str("Native reactive web framework")) + "," +
+                  json_build_pair("category", json_encode_str("web")) + "," +
+                  json_build_pair("ai_verdict", json_encode_str("clean")) + rb;
+
+    let p3 = lb + json_build_pair("name", json_encode_str("tensor-ai")) + "," +
+                  json_build_pair("version", json_encode_str("0.5.0")) + "," +
+                  json_build_pair("description", json_encode_str("Quantized INT8 tensor kernels")) + "," +
+                  json_build_pair("category", json_encode_str("ai")) + "," +
+                  json_build_pair("ai_verdict", json_encode_str("clean")) + rb;
+
+    let pkgs_arr = "[" + p1 + "," + p2 + "," + p3 + "]";
+    let count_num: i64 = 3;
+    let cnt_str = json_encode_int(count_num);
+    let part_pkgs = json_build_pair("packages", pkgs_arr);
+    let part_cnt = json_build_pair("count", cnt_str);
+
+    let resp = lb + part_pkgs + "," + part_cnt + rb;
+    return resp;
+}

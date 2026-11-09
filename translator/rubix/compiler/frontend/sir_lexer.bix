@@ -1,0 +1,121 @@
+# ==============================================================================
+# Rubix — Lexical Tokenizer (SIR Lexer)
+# File: compiler/frontend/sir_lexer.bix
+#
+# Recognizes Rubix language tokens including:
+#   - Standard imperative tokens (fn, let, if, else, while, return)
+#   - Effect keywords (pure, effect, io, net, syscall, alloc, read, write)
+#   - Capability tokens (with, cap, CapFs, CapNet, CapProc, CapUnsafe)
+#   - Affine keywords (region, move, borrow, affine)
+# ==============================================================================
+
+# Token Kinds
+let SIR_TOK_EOF        = 0;
+let SIR_TOK_INT        = 1;
+let SIR_TOK_IDENT      = 2;
+let SIR_TOK_STRING     = 3;
+
+# Standard Keywords
+let SIR_TOK_FN         = 10;
+let SIR_TOK_LET        = 11;
+let SIR_TOK_IF         = 12;
+let SIR_TOK_ELSE       = 13;
+let SIR_TOK_WHILE      = 14;
+let SIR_TOK_RETURN     = 15;
+
+# Effect & Capability Keywords
+let SIR_TOK_PURE       = 20;
+let SIR_TOK_EFFECT     = 21;
+let SIR_TOK_WITH       = 22;
+let SIR_TOK_CAP        = 23;
+let SIR_TOK_UNSAFE     = 24;
+
+# Resource & Affine Keywords
+let SIR_TOK_REGION     = 30;
+let SIR_TOK_MOVE       = 31;
+let SIR_TOK_BORROW     = 32;
+let SIR_TOK_AFFINE     = 33;
+
+# Operators & Punctuation
+let SIR_TOK_LPAREN     = 40; # (
+let SIR_TOK_RPAREN     = 41; # )
+let SIR_TOK_LBRACE     = 42; # {
+let SIR_TOK_RBRACE     = 43; # }
+let SIR_TOK_COLON      = 44; # :
+let SIR_TOK_SEMICOLON  = 45; # ;
+let SIR_TOK_COMMA      = 46; # ,
+let SIR_TOK_ASSIGN     = 47; # =
+let SIR_TOK_PLUS       = 48; # +
+let SIR_TOK_MINUS      = 49; # -
+let SIR_TOK_STAR       = 50; # *
+let SIR_TOK_SLASH      = 51; # /
+let SIR_TOK_EQ         = 52; # ==
+let SIR_TOK_NE         = 53; # !=
+let SIR_TOK_LT         = 54; # <
+let SIR_TOK_GT         = 55; # >
+let SIR_TOK_AMP        = 56; # &
+
+# Helper hash function for tokens
+fn sir_hash_span(src: i64, start: i64, len: i64): i64 {
+    let h = 5381;
+    let i = 0;
+    while i < len {
+        let b = get_byte(src, start + i);
+        h = ((h << 5) + h) + b;
+        i = i + 1;
+    }
+    return h;
+}
+
+fn sir_is_whitespace(b: i64): i64 {
+    if (b == 32) | (b == 9) | (b == 10) | (b == 13) { return 1; }
+    return 0;
+}
+
+fn sir_is_digit(b: i64): i64 {
+    if (b >= 48) & (b <= 57) { return 1; }
+    return 0;
+}
+
+fn sir_is_alpha(b: i64): i64 {
+    if (b >= 65) & (b <= 90) { return 1; }
+    if (b >= 97) & (b <= 122) { return 1; }
+    if b == 95 { return 1; } # '_'
+    return 0;
+}
+
+fn sir_classify_keyword(src: i64, start: i64, len: i64): i64 {
+    let h = sir_hash_span(src, start, len);
+    # "fn"
+    if (len == 2) & (get_byte(src, start) == 102) & (get_byte(src, start + 1) == 110) { return SIR_TOK_FN; }
+    # "if"
+    if (len == 2) & (get_byte(src, start) == 105) & (get_byte(src, start + 1) == 102) { return SIR_TOK_IF; }
+    # "let"
+    if (len == 3) & (get_byte(src, start) == 108) & (get_byte(src, start + 1) == 101) & (get_byte(src, start + 2) == 116) { return SIR_TOK_LET; }
+    # "else"
+    if (len == 4) & (get_byte(src, start) == 101) & (get_byte(src, start + 1) == 108) { return SIR_TOK_ELSE; }
+    # "while"
+    if (len == 5) & (get_byte(src, start) == 119) & (get_byte(src, start + 1) == 104) { return SIR_TOK_WHILE; }
+    # "return"
+    if (len == 6) & (get_byte(src, start) == 114) & (get_byte(src, start + 1) == 101) { return SIR_TOK_RETURN; }
+    # "pure"
+    if (len == 4) & (get_byte(src, start) == 112) & (get_byte(src, start + 1) == 117) & (get_byte(src, start + 2) == 114) & (get_byte(src, start + 3) == 101) { return SIR_TOK_PURE; }
+    # "effect"
+    if (len == 6) & (get_byte(src, start) == 101) & (get_byte(src, start + 1) == 102) & (get_byte(src, start + 2) == 102) { return SIR_TOK_EFFECT; }
+    # "with"
+    if (len == 4) & (get_byte(src, start) == 119) & (get_byte(src, start + 1) == 105) & (get_byte(src, start + 2) == 116) & (get_byte(src, start + 3) == 104) { return SIR_TOK_WITH; }
+    # "cap"
+    if (len == 3) & (get_byte(src, start) == 99) & (get_byte(src, start + 1) == 97) & (get_byte(src, start + 2) == 112) { return SIR_TOK_CAP; }
+    # "region"
+    if (len == 6) & (get_byte(src, start) == 114) & (get_byte(src, start + 1) == 101) & (get_byte(src, start + 2) == 103) { return SIR_TOK_REGION; }
+    # "move"
+    if (len == 4) & (get_byte(src, start) == 109) & (get_byte(src, start + 1) == 111) & (get_byte(src, start + 2) == 118) & (get_byte(src, start + 3) == 101) { return SIR_TOK_MOVE; }
+    # "borrow"
+    if (len == 6) & (get_byte(src, start) == 98) & (get_byte(src, start + 1) == 111) & (get_byte(src, start + 2) == 114) { return SIR_TOK_BORROW; }
+    # "affine"
+    if (len == 6) & (get_byte(src, start) == 97) & (get_byte(src, start + 1) == 102) & (get_byte(src, start + 2) == 102) { return SIR_TOK_AFFINE; }
+    # "unsafe"
+    if (len == 6) & (get_byte(src, start) == 117) & (get_byte(src, start + 1) == 110) & (get_byte(src, start + 2) == 115) { return SIR_TOK_UNSAFE; }
+
+    return SIR_TOK_IDENT;
+}

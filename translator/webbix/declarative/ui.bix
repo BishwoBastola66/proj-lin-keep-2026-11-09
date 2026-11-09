@@ -1,0 +1,399 @@
+# ==============================================================================
+# Webbix Framework — Declarative UI Engine (webbix/declarative/ui.bix)
+# Pure Rubix auto-parenting component engine.
+#
+# Key Features:
+#   1. Automatic parent/child tree nesting (ZERO parent node IDs)
+#   2. Named reactive state store (ZERO numeric state slot IDs)
+#   3. High-level component primitives (ZERO Web IR internals)
+#   4. Zero HTML tags, zero CSS strings, zero JavaScript
+# ==============================================================================
+
+include "../ir/builder.bix";
+include "../components/ui.bix";
+
+struct Ui {
+    app: *WebApp,
+    parent_stack: [i64; 64],
+    depth: i64,
+    state_names: [str; 64],
+    state_slots: [i64; 64],
+    state_count: i64
+}
+
+fn ui_init(ui: *Ui, app: *WebApp, title: str): void {
+    web_app_init(app, title);
+    ui.app = app;
+    ui.depth = 0;
+    ui.state_count = 0;
+}
+
+fn current_parent(ui: *Ui): i64 {
+    if ui.depth <= 0 { return -1; }
+    return ui.parent_stack[ui.depth - 1];
+}
+
+fn push_parent(ui: *Ui, id: i64): void {
+    if (ui.depth >= 0) & (ui.depth < 64) {
+        ui.parent_stack[ui.depth] = id;
+        ui.depth = ui.depth + 1;
+    }
+}
+
+fn pop_parent(ui: *Ui): void {
+    if ui.depth > 0 {
+        ui.depth = ui.depth - 1;
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Named Reactive State API
+# ------------------------------------------------------------------------------
+
+fn ui_state(ui: *Ui, name: str, initial_val: i64): void {
+    let slot = ui.state_count + 1;
+    ui.state_names[ui.state_count] = name;
+    ui.state_slots[ui.state_count] = slot;
+    ui.state_count = ui.state_count + 1;
+    web_app_set_state(ui.app, slot, initial_val);
+}
+
+fn find_slot(ui: *Ui, name: str): i64 {
+    let i = 0;
+    while i < ui.state_count {
+        if string_equal(ui.state_names[i], name) {
+            return ui.state_slots[i];
+        }
+        i = i + 1;
+    }
+    return 1;
+}
+
+fn ui_get_state(ui: *Ui, name: str): i64 {
+    let slot = find_slot(ui, name);
+    return web_app_get_state(ui.app, slot);
+}
+
+fn ui_set_state(ui: *Ui, name: str, val: i64): void {
+    let slot = find_slot(ui, name);
+    web_app_set_state(ui.app, slot, val);
+}
+
+fn ui_inc_state(ui: *Ui, name: str): void {
+    let slot = find_slot(ui, name);
+    web_app_increment_state(ui.app, slot);
+}
+
+fn ui_dec_state(ui: *Ui, name: str): void {
+    let slot = find_slot(ui, name);
+    web_app_decrement_state(ui.app, slot);
+}
+
+fn ui_toggle_state(ui: *Ui, name: str): void {
+    let slot = find_slot(ui, name);
+    web_app_toggle_state(ui.app, slot);
+}
+
+# ------------------------------------------------------------------------------
+# Declarative Component Primitives (Auto-Parenting, Zero Node IDs)
+# ------------------------------------------------------------------------------
+
+fn UiPage(ui: *Ui, route: str, title: str): void {
+    let p_id = web_page(ui.app, route, title);
+    push_parent(ui, p_id);
+}
+
+fn UiEnd(ui: *Ui): void {
+    pop_parent(ui);
+}
+
+fn UiNavbar(ui: *Ui, brand: str, badge: str, l1: str, u1: str, l2: str, u2: str): void {
+    let p = current_parent(ui);
+    let id = ui_navbar(ui.app, p, brand, badge, l1, u1, l2, u2);
+}
+
+fn UiHero(ui: *Ui, eyebrow: str, headline: str, desc: str, cta: str, url: str): void {
+    let p = current_parent(ui);
+    let color = WebColor.Primary as i64;
+    let id = ui_hero(ui.app, p, eyebrow, headline, desc, cta, url, color);
+}
+
+fn UiButton(ui: *Ui, label: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = ui_action_button(ui.app, p, label, slot);
+}
+
+fn UiButtonToggle(ui: *Ui, label: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_button(ui.app, p, label);
+    web_on_click_toggle(ui.app, id, slot);
+}
+
+fn UiButtonNavigate(ui: *Ui, label: str, url: str): void {
+    let p = current_parent(ui);
+    let id = web_button(ui.app, p, label);
+    web_on_click_navigate(ui.app, id, url);
+}
+
+fn UiStats(ui: *Ui): void {
+    let p = current_parent(ui);
+    let s_id = ui_stats_grid(ui.app, p);
+    push_parent(ui, s_id);
+}
+
+fn UiStatReactive(ui: *Ui, label: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = ui_stat_reactive(ui.app, p, label, slot);
+}
+
+fn UiStatMetric(ui: *Ui, label: str, val: str): void {
+    let p = current_parent(ui);
+    let color = WebColor.Accent as i64;
+    let id = ui_stat_metric(ui.app, p, label, val, color);
+}
+
+fn UiSection(ui: *Ui, title: str, subtitle: str): void {
+    let p = current_parent(ui);
+    let s_id = ui_section(ui.app, p, title, subtitle);
+    push_parent(ui, s_id);
+}
+
+fn UiGrid(ui: *Ui, columns: i64): void {
+    let p = current_parent(ui);
+    let g_id = ui_grid(ui.app, p, columns);
+    push_parent(ui, g_id);
+}
+
+fn UiFlex(ui: *Ui, direction: i64): void {
+    let p = current_parent(ui);
+    let f_id = web_flex(ui.app, p, direction);
+    push_parent(ui, f_id);
+}
+
+fn UiProjectCard(ui: *Ui, cat: str, title: str, desc: str, t1: str, t2: str): void {
+    let p = current_parent(ui);
+    let id = ui_project_card(ui.app, p, cat, title, desc, t1, t2);
+}
+
+fn UiBadgeCard(ui: *Ui, title: str, b1: str, b2: str, b3: str, b4: str, b5: str): void {
+    let p = current_parent(ui);
+    let id = ui_badge_card(ui.app, p, title, b1, b2, b3, b4, b5);
+}
+
+fn UiCard(ui: *Ui, title: str): void {
+    let p = current_parent(ui);
+    let c_id = web_card(ui.app, p, title);
+    push_parent(ui, c_id);
+}
+
+fn UiBadge(ui: *Ui, text: str): void {
+    let p = current_parent(ui);
+    let id = web_badge(ui.app, p, text);
+}
+
+fn UiTitle(ui: *Ui, text: str): void {
+    let p = current_parent(ui);
+    let id = web_title(ui.app, p, text);
+}
+
+fn UiHeading(ui: *Ui, text: str, level: i64): void {
+    let p = current_parent(ui);
+    let id = web_heading(ui.app, p, text, level);
+}
+
+fn UiText(ui: *Ui, text: str): void {
+    let p = current_parent(ui);
+    let id = web_text(ui.app, p, text);
+}
+
+fn UiParagraph(ui: *Ui, text: str): void {
+    let p = current_parent(ui);
+    let id = web_paragraph(ui.app, p, text);
+}
+
+fn UiFooter(ui: *Ui, copyright: str): void {
+    let p = current_parent(ui);
+    let id = ui_footer(ui.app, p, copyright);
+}
+
+fn UiLinkButton(ui: *Ui, label: str, url: str): void {
+    let p = current_parent(ui);
+    let color = WebColor.Primary as i64;
+    let id = web_button_link(ui.app, p, label, url, color);
+}
+
+fn UiLink(ui: *Ui, label: str, url: str): void {
+    let p = current_parent(ui);
+    let id = web_link(ui.app, p, label, url);
+}
+
+fn UiImage(ui: *Ui, src: str, alt: str): void {
+    let p = current_parent(ui);
+    let id = web_image(ui.app, p, src, alt);
+}
+
+fn UiDivider(ui: *Ui): void {
+    let p = current_parent(ui);
+    let id = web_divider(ui.app, p);
+}
+
+fn UiSpacer(ui: *Ui, size: i64): void {
+    let p = current_parent(ui);
+    let id = web_spacer(ui.app, p, size);
+}
+
+# Forms
+fn UiForm(ui: *Ui, action_id: i64): void {
+    let p = current_parent(ui);
+    let f_id = web_form(ui.app, p, action_id);
+    push_parent(ui, f_id);
+}
+
+fn UiInput(ui: *Ui, placeholder: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_input(ui.app, p, WebInputKind.Text as i64, placeholder, slot);
+}
+
+fn UiInputKind(ui: *Ui, kind: i64, placeholder: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_input(ui.app, p, kind, placeholder, slot);
+}
+
+fn UiTextarea(ui: *Ui, placeholder: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_textarea(ui.app, p, placeholder, slot);
+}
+
+fn UiLabel(ui: *Ui, text: str, for_field: str): void {
+    let p = current_parent(ui);
+    let id = web_label(ui.app, p, text, for_field);
+}
+
+fn UiSubmit(ui: *Ui, label: str): void {
+    let p = current_parent(ui);
+    let id = web_button(ui.app, p, label);
+}
+
+# Interactive components
+fn UiDialog(ui: *Ui, title: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_dialog(ui.app, p, title, slot);
+    push_parent(ui, id);
+}
+
+fn UiTabs(ui: *Ui, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_tabs(ui.app, p, slot);
+    push_parent(ui, id);
+}
+
+fn UiTabPanel(ui: *Ui, label: str, index: i64): void {
+    let p = current_parent(ui);
+    let id = web_tab_panel(ui.app, p, label, index);
+    push_parent(ui, id);
+}
+
+fn UiAccordion(ui: *Ui): void {
+    let p = current_parent(ui);
+    let id = web_accordion(ui.app, p);
+    push_parent(ui, id);
+}
+
+fn UiAccordionPanel(ui: *Ui, title: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_accordion_panel(ui.app, p, title, slot);
+    push_parent(ui, id);
+}
+
+fn UiTimeline(ui: *Ui): void {
+    let p = current_parent(ui);
+    let id = web_timeline(ui.app, p);
+    push_parent(ui, id);
+}
+
+fn UiTimelineItem(ui: *Ui, title: str, desc: str, date: str): void {
+    let p = current_parent(ui);
+    let id = web_timeline_item(ui.app, p, title, desc, date);
+}
+
+fn UiList(ui: *Ui): void {
+    let p = current_parent(ui);
+    let id = web_list(ui.app, p);
+    push_parent(ui, id);
+}
+
+fn UiListItem(ui: *Ui, text: str): void {
+    let p = current_parent(ui);
+    let id = web_list_item(ui.app, p, text);
+}
+
+fn UiProgress(ui: *Ui, state_name: str, max_val: i64): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_progress(ui.app, p, slot, max_val);
+}
+
+fn UiSpinner(ui: *Ui): void {
+    let p = current_parent(ui);
+    let id = web_spinner(ui.app, p);
+}
+
+fn UiSkeleton(ui: *Ui, width: i64, height: i64): void {
+    let p = current_parent(ui);
+    let id = web_skeleton(ui.app, p, width, height);
+}
+
+fn UiToast(ui: *Ui, message: str, state_name: str): void {
+    let p = current_parent(ui);
+    let slot = find_slot(ui, state_name);
+    let id = web_toast(ui.app, p, message, slot);
+}
+
+fn UiBreadcrumb(ui: *Ui): void {
+    let p = current_parent(ui);
+    let id = web_breadcrumb(ui.app, p);
+    push_parent(ui, id);
+}
+
+fn UiTooltip(ui: *Ui, text: str): void {
+    let p = current_parent(ui);
+    let id = web_tooltip(ui.app, p, text);
+}
+
+# Animation
+fn UiAnimate(ui: *Ui, anim: WebAnimation): void {
+    let p = current_parent(ui);
+    if p >= 0 {
+        ui.app.nodes[p].style.animation = anim as i64;
+    }
+}
+
+fn UiAnimateFull(ui: *Ui, anim: WebAnimation, duration_ms: i64, delay_ms: i64, easing: i64): void {
+    let p = current_parent(ui);
+    if p >= 0 {
+        ui.app.nodes[p].style.animation = anim as i64;
+    }
+}
+
+fn UiAnimateOnScroll(ui: *Ui, anim: WebAnimation, duration_ms: i64): void {
+    let p = current_parent(ui);
+    if p >= 0 {
+        ui.app.nodes[p].style.animation = anim as i64;
+    }
+}
+
+fn UiStagger(ui: *Ui, stagger_ms: i64): void {
+    let p = current_parent(ui);
+    if p >= 0 {
+        ui.app.nodes[p].style.animation = WebAnimation.StaggerChildren as i64;
+    }
+}

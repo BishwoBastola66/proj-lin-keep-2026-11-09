@@ -1,0 +1,478 @@
+# ==============================================================================
+# Webbix Framework — High-Level Developer Application Engine
+# File: webbix/declarative/app.bix
+#
+# "HIDE THE MACHINERY, NOT REMOVE THE POWER"
+#
+# This is the primary developer-facing API. Application code uses ONLY
+# the functions in this file. All framework machinery (WebApp, Ui, node IDs,
+# state slots, Web IR, REX, sockets, HTTP) is hidden inside.
+#
+# Application developers think about:
+#   app, page, route, component, state, events, styles, animations
+#
+# Webbix internally handles:
+#   WebApp, Ui, node IDs, parent IDs, state slots, Web IR, REX,
+#   HTTP, sockets, OS syscalls, rendering, native machine-code
+# ==============================================================================
+
+include "ui.bix";
+include "../rex/rex_bridge.bix";
+include "../net/platform.bix";
+include "../net/socket.bix";
+include "../server/http.bix";
+include "../routing/router.bix";
+include "../render/render.bix";
+
+# ==============================================================================
+# 1. Application Container
+# ==============================================================================
+
+struct App {
+    name: str,
+    port: i64,
+    web_app: *WebApp,
+    ui: *Ui
+}
+
+fn App(name: str): *App {
+    let app: *App = alloc_buffer(40) as *App;
+    app.name = name;
+    app.port = 8089;
+
+    let wa: *WebApp = alloc_buffer(131072) as *WebApp;
+    app.web_app = wa;
+
+    let ui: *Ui = alloc_buffer(8192) as *Ui;
+    app.ui = ui;
+
+    ui_init(ui, wa, name);
+
+
+
+    return app;
+}
+
+# ==============================================================================
+# 2. State Management — Named Reactive State
+# ==============================================================================
+
+fn State(app: *App, name: str, initial_val: i64): void {
+    ui_state(app.ui, name, initial_val);
+}
+
+fn StateGet(app: *App, name: str): i64 {
+    return ui_get_state(app.ui, name);
+}
+
+fn StateSet(app: *App, name: str, val: i64): void {
+    ui_set_state(app.ui, name, val);
+}
+
+fn StateInc(app: *App, name: str): i64 {
+    ui_inc_state(app.ui, name);
+    return ui_get_state(app.ui, name);
+}
+
+fn StateDec(app: *App, name: str): i64 {
+    ui_dec_state(app.ui, name);
+    return ui_get_state(app.ui, name);
+}
+
+fn StateToggle(app: *App, name: str): i64 {
+    ui_toggle_state(app.ui, name);
+    return ui_get_state(app.ui, name);
+}
+
+# ==============================================================================
+# 3. SEO & Metadata
+# ==============================================================================
+
+fn Meta(app: *App, title: str, description: str): void {
+    app.web_app.title = title;
+    app.web_app.description = description;
+}
+
+fn MetaOG(app: *App, og_title: str, og_desc: str, og_image: str): void {
+    app.web_app.title = og_title;
+    app.web_app.description = og_desc;
+}
+
+fn MetaCanonical(app: *App, url: str): void {
+    app.web_app.canonical_url = url;
+}
+
+# ==============================================================================
+# 4. Theme
+# ==============================================================================
+
+fn Theme(app: *App, theme: i64): void {
+    app.web_app.theme = theme;
+}
+
+# ==============================================================================
+# 5. Declarative Component API — Zero Node IDs, Zero Parent IDs
+# ==============================================================================
+
+# --- Document Structure ---
+
+fn Page(app: *App, route: str, title: str): void {
+    UiPage(app.ui, route, title);
+}
+
+fn End(app: *App): void {
+    UiEnd(app.ui);
+}
+
+# --- Navigation ---
+
+fn Navbar(app: *App, brand: str, badge: str, l1: str, u1: str, l2: str, u2: str): void {
+    UiNavbar(app.ui, brand, badge, l1, u1, l2, u2);
+}
+
+# --- Hero ---
+
+fn Hero(app: *App, eyebrow: str, headline: str, desc: str, cta: str, url: str): void {
+    UiHero(app.ui, eyebrow, headline, desc, cta, url);
+}
+
+# --- Buttons ---
+
+fn Button(app: *App, label: str, state_name: str): void {
+    UiButton(app.ui, label, state_name);
+}
+
+fn ButtonToggle(app: *App, label: str, state_name: str): void {
+    UiButtonToggle(app.ui, label, state_name);
+}
+
+fn ButtonNavigate(app: *App, label: str, url: str): void {
+    UiButtonNavigate(app.ui, label, url);
+}
+
+fn LinkButton(app: *App, label: str, url: str): void {
+    UiLinkButton(app.ui, label, url);
+}
+
+# --- Statistics ---
+
+fn Stats(app: *App): void {
+    UiStats(app.ui);
+}
+
+fn StatReactive(app: *App, label: str, state_name: str): void {
+    UiStatReactive(app.ui, label, state_name);
+}
+
+fn StatMetric(app: *App, label: str, val: str): void {
+    UiStatMetric(app.ui, label, val);
+}
+
+# --- Sections & Layout ---
+
+fn Section(app: *App, title: str, subtitle: str): void {
+    UiSection(app.ui, title, subtitle);
+}
+
+fn Grid(app: *App, columns: i64): void {
+    UiGrid(app.ui, columns);
+}
+
+fn Flexbox(app: *App, direction: i64): void {
+    UiFlex(app.ui, direction);
+}
+
+# --- Cards ---
+
+fn ProjectCard(app: *App, cat: str, title: str, desc: str, t1: str, t2: str): void {
+    UiProjectCard(app.ui, cat, title, desc, t1, t2);
+}
+
+fn BadgeCard(app: *App, title: str, b1: str, b2: str, b3: str, b4: str, b5: str): void {
+    UiBadgeCard(app.ui, title, b1, b2, b3, b4, b5);
+}
+
+fn Card(app: *App, title: str): void {
+    UiCard(app.ui, title);
+}
+
+fn Badge(app: *App, text: str): void {
+    UiBadge(app.ui, text);
+}
+
+# --- Typography ---
+
+fn Title(app: *App, text: str): void {
+    UiTitle(app.ui, text);
+}
+
+fn Heading(app: *App, text: str, level: i64): void {
+    UiHeading(app.ui, text, level);
+}
+
+fn Text(app: *App, text: str): void {
+    UiText(app.ui, text);
+}
+
+fn Paragraph(app: *App, text: str): void {
+    UiParagraph(app.ui, text);
+}
+
+# --- Footer ---
+
+fn Footer(app: *App, copyright: str): void {
+    UiFooter(app.ui, copyright);
+}
+
+# --- Media ---
+
+fn Image(app: *App, src: str, alt: str): void {
+    UiImage(app.ui, src, alt);
+}
+
+fn Link(app: *App, label: str, url: str): void {
+    UiLink(app.ui, label, url);
+}
+
+# --- Layout Utilities ---
+
+fn Divider(app: *App): void {
+    UiDivider(app.ui);
+}
+
+fn Spacer(app: *App, size: i64): void {
+    UiSpacer(app.ui, size);
+}
+
+# --- Forms ---
+
+fn Form(app: *App, action_id: i64): void {
+    UiForm(app.ui, action_id);
+}
+
+fn FormLabel(app: *App, text: str, for_field: str): void {
+    UiLabel(app.ui, text, for_field);
+}
+
+fn FormInput(app: *App, placeholder: str, state_name: str): void {
+    UiInput(app.ui, placeholder, state_name);
+}
+
+fn FormInputKind(app: *App, kind: i64, placeholder: str, state_name: str): void {
+    UiInputKind(app.ui, kind, placeholder, state_name);
+}
+
+fn FormTextarea(app: *App, placeholder: str, state_name: str): void {
+    UiTextarea(app.ui, placeholder, state_name);
+}
+
+fn FormSubmit(app: *App, label: str): void {
+    UiSubmit(app.ui, label);
+}
+
+
+# --- Interactive Components ---
+
+fn Dialog(app: *App, title: str, state_name: str): void {
+    UiDialog(app.ui, title, state_name);
+}
+
+fn TabGroup(app: *App, state_name: str): void {
+    UiTabs(app.ui, state_name);
+}
+
+fn TabPanel(app: *App, label: str, index: i64): void {
+    UiTabPanel(app.ui, label, index);
+}
+
+fn AccordionGroup(app: *App): void {
+    UiAccordion(app.ui);
+}
+
+fn AccordionItem(app: *App, title: str, state_name: str): void {
+    UiAccordionPanel(app.ui, title, state_name);
+}
+
+fn TimelineGroup(app: *App): void {
+    UiTimeline(app.ui);
+}
+
+fn TimelineEntry(app: *App, title: str, desc: str, date: str): void {
+    UiTimelineItem(app.ui, title, desc, date);
+}
+
+fn ListGroup(app: *App): void {
+    UiList(app.ui);
+}
+
+fn ListEntry(app: *App, text: str): void {
+    UiListItem(app.ui, text);
+}
+
+fn ProgressBar(app: *App, state_name: str, max_val: i64): void {
+    UiProgress(app.ui, state_name, max_val);
+}
+
+fn LoadingSpinner(app: *App): void {
+    UiSpinner(app.ui);
+}
+
+fn SkeletonPlaceholder(app: *App, width: i64, height: i64): void {
+    UiSkeleton(app.ui, width, height);
+}
+
+fn ToastMessage(app: *App, message: str, state_name: str): void {
+    UiToast(app.ui, message, state_name);
+}
+
+fn Breadcrumbs(app: *App): void {
+    UiBreadcrumb(app.ui);
+}
+
+fn TooltipText(app: *App, text: str): void {
+    UiTooltip(app.ui, text);
+}
+
+# --- Animation ---
+
+fn Animate(app: *App, anim: WebAnimation): void {
+    UiAnimate(app.ui, anim);
+}
+
+fn AnimateCustom(app: *App, anim: WebAnimation, duration_ms: i64, delay_ms: i64, easing: i64): void {
+    UiAnimateFull(app.ui, anim, duration_ms, delay_ms, easing);
+}
+
+fn AnimateOnScroll(app: *App, anim: WebAnimation, duration_ms: i64): void {
+    UiAnimateOnScroll(app.ui, anim, duration_ms);
+}
+
+fn StaggerChildren(app: *App, stagger_ms: i64): void {
+    UiStagger(app.ui, stagger_ms);
+}
+
+# ==============================================================================
+# 6. Lifecycle & Execution
+# ==============================================================================
+
+fn Build(app: *App): i64 {
+    if app.web_app.node_count <= 0 { return -1; }
+    let insts: [RexWebInstruction; 128];
+    let inst_count = rex_compile_web_app(app.web_app, &insts[0], 128);
+    if inst_count <= 0 { return -2; }
+    return 42;
+}
+
+fn Run(app: *App): i64 {
+    return Build(app);
+}
+
+fn Serve(app: *App, port: i64): i64 {
+    if port <= 0 {
+        port = app.port;
+    }
+    if port <= 0 {
+        port = 8080;
+    }
+    app.port = port;
+
+    let b_res = Build(app);
+    if b_res != 42 { return -10; }
+
+    let disp: PlatformDispatcher;
+    let p_res = webbix_platform_init(&disp);
+    if p_res < 0 { return -1; }
+
+    let sock: WebbixSocket;
+    let s_res = webbix_socket_create(&sock, &disp, AF_INET, SOCK_STREAM, 0);
+    if s_res < 0 {
+        webbix_platform_destroy(&disp);
+        return -2;
+    }
+
+    webbix_socket_set_reuseaddr(&sock, &disp);
+
+    let b_res2 = webbix_socket_bind(&sock, &disp, port);
+    if b_res2 < 0 {
+        webbix_socket_close(&sock);
+        webbix_platform_destroy(&disp);
+        return -3;
+    }
+
+    let l_res = webbix_socket_listen(&sock, &disp, 64);
+    if l_res < 0 {
+        webbix_socket_close(&sock);
+        webbix_platform_destroy(&disp);
+        return -4;
+    }
+
+    let scratch = sys_mmap(0, 65536, 3, 34, -1, 0);
+    webbix_socket_write_str(1, "\n=================================================================\n", scratch);
+    webbix_socket_write_str(1, "WEBBIX NATIVE APPLICATION SERVER\n", scratch);
+    webbix_socket_write_str(1, "=================================================================\n", scratch);
+    webbix_socket_write_str(1, "  Application: ", scratch);
+    webbix_socket_write_str(1, app.name, scratch);
+    webbix_socket_write_str(1, "\n  Port:        ", scratch);
+    webbix_socket_write_str(1, webbix_int_to_str(port), scratch);
+    webbix_socket_write_str(1, "\n  Status:      Listening on http://127.0.0.1:", scratch);
+    webbix_socket_write_str(1, webbix_int_to_str(port), scratch);
+    webbix_socket_write_str(1, "/\n  Pipeline:    Native Web IR -> HTTP Router -> Browser Output\n", scratch);
+    webbix_socket_write_str(1, "=================================================================\n", scratch);
+    webbix_socket_write_str(1, "[Webbix] Ready for connections.\n\n", scratch);
+
+    while 1 {
+        let client_fd = webbix_socket_accept(&sock, &disp);
+        if client_fd >= 0 {
+            let req_len = sys_read(client_fd, scratch, 4096);
+            if req_len > 0 {
+                set_byte(scratch, req_len, 0);
+
+                let req_buf = alloc_buffer(req_len + 1) as *u8;
+                let ri = 0;
+                while ri < req_len {
+                    req_buf[ri] = get_byte(scratch, ri) as u8;
+                    ri = ri + 1;
+                }
+                req_buf[req_len] = 0 as u8;
+                let req_str = req_buf as str;
+
+                # 1. Parse real HTTP request
+                let req: HttpRequest;
+                http_parse_request(&req, req_str);
+                free_buffer(req_buf as ptr, req_len + 1);
+
+                # 2. Match route against Web IR Page nodes
+                let param = "";
+                let page_id = webbix_router_find_page(app.web_app, req.path, req.method, &param);
+
+                # 3. Compile Web IR component tree to HTML5 document
+                let body = webbix_render_document(app.web_app, app.ui, page_id, param);
+
+                # 4. Build typed HTTP/1.1 response
+                let resp: HttpResponse;
+                let status_code = 200;
+                if page_id == -404 {
+                    status_code = 404;
+                }
+                http_make_response(&resp, status_code, "text/html; charset=utf-8", body);
+                let resp_str = http_response_format(&resp);
+
+                # 5. Write response to client socket
+                webbix_socket_write_str(client_fd, resp_str, scratch);
+            }
+            sys_close(client_fd);
+        }
+    }
+
+    webbix_socket_close(&sock);
+    webbix_platform_destroy(&disp);
+    return 0;
+}
+
+fn DispatchClick(app: *App, button_node_id: i64): void {
+    rex_dispatch_ui_event(app.web_app, button_node_id, WebEventKind.Click);
+}
+
+fn DispatchEvent(app: *App, node_id: i64, event_kind: i64): void {
+    rex_dispatch_ui_event(app.web_app, node_id, event_kind);
+}

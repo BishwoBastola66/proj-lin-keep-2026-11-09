@@ -1,0 +1,17 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — Navigation Bar (components/navbar.bix)
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+
+fn render_navbar(app: *App): void {
+    Navbar(
+        app,
+        "Yugant Xettri",
+        "Systems Architect",
+        "Home",
+        "/",
+        "Projects",
+        "/projects"
+    );
+}

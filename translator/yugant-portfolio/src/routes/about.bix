@@ -1,0 +1,26 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — About Route (routes/about.bix)
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+include "../components/navbar.bix";
+include "../components/footer.bix";
+
+fn render_about_page(app: *App): void {
+    Page(app, "/about", "About — Yugant Xettri");
+        render_navbar(app);
+
+        Heading(app, "About Yugant Xettri", 1);
+        Paragraph(app, "Yugant Xettri is a systems programmer, compiler engineer, and software architect passionate about bare-metal performance, mechanical sympathy, and developer ergonomics.");
+        Paragraph(app, "Believing that modern software has become overburdened by artificial abstraction layers, Yugant dedicates his work to crafting compiler-driven tools that deliver blazing-fast native speed without sacrificing high-level developer clarity.");
+
+        Section(app, "Engineering Principles", "First-principles engineering across the technology stack.");
+            Grid(app, 2);
+                BadgeCard(app, "Core Philosophy", "Zero Overhead", "Mechanical Sympathy", "Radical Simplicity", "Deterministic Builds", "Pure Native");
+                BadgeCard(app, "Languages & Standards", "Rubix", "C99", "Rust", "x86-64 ASM", "POSIX Standards");
+            End(app);
+        End(app);
+
+        render_footer(app);
+    End(app);
+}

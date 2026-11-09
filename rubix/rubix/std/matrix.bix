@@ -1,0 +1,49 @@
+# ==============================================================================
+# Rubix Standard Library: Matrix Mathematics (std/matrix.bix)
+# Pure native 2x2 matrix operations, determinants, trace, and 3D vector dot.
+# ==============================================================================
+
+struct Matrix2x2 {
+    m00: i64,
+    m01: i64,
+    m10: i64,
+    m11: i64
+}
+
+fn mat2_new(a: i64, b: i64, c: i64, d: i64): *Matrix2x2 {
+    let m = alloc_buffer(32) as *Matrix2x2;
+    m.m00 = a;
+    m.m01 = b;
+    m.m10 = c;
+    m.m11 = d;
+    return m;
+}
+
+fn mat2_identity(): *Matrix2x2 {
+    return mat2_new(1, 0, 0, 1);
+}
+
+fn mat2_add(a: *Matrix2x2, b: *Matrix2x2): *Matrix2x2 {
+    return mat2_new(a.m00 + b.m00, a.m01 + b.m01, a.m10 + b.m10, a.m11 + b.m11);
+}
+
+fn mat2_mul(a: *Matrix2x2, b: *Matrix2x2): *Matrix2x2 {
+    return mat2_new(
+        (a.m00 * b.m00) + (a.m01 * b.m10),
+        (a.m00 * b.m01) + (a.m01 * b.m11),
+        (a.m10 * b.m00) + (a.m11 * b.m10),
+        (a.m10 * b.m01) + (a.m11 * b.m11)
+    );
+}
+
+fn mat2_determinant(m: *Matrix2x2): i64 {
+    return (m.m00 * m.m11) - (m.m01 * m.m10);
+}
+
+fn mat2_trace(m: *Matrix2x2): i64 {
+    return m.m00 + m.m11;
+}
+
+fn dot_product_3d(x1: i64, y1: i64, z1: i64, x2: i64, y2: i64, z2: i64): i64 {
+    return (x1 * x2) + (y1 * y2) + (z1 * z2);
+}

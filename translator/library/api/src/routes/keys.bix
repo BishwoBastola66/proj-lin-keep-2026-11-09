@@ -1,0 +1,32 @@
+# ==============================================================================
+# Rubix Library API: Public Keys Route (/v1/keys)
+# File: library/api/src/routes/keys.bix
+# ==============================================================================
+
+use std.core;
+use std.string;
+use std.json;
+
+fn api_handle_get_keys(): str {
+    let lb = json_lbrace();
+    let rb = json_rbrace();
+
+    let k1 = lb + json_build_pair("keyid", json_encode_str("rubix-root")) + "," +
+                  json_build_pair("algorithm", json_encode_str("Ed25519")) + "," +
+                  json_build_pair("public_key", json_encode_str("e4d9b2e1a3c5f780a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0")) + "," +
+                  json_build_pair("status", json_encode_str("active")) + rb;
+
+    let k2 = lb + json_build_pair("keyid", json_encode_str("rubix-dev")) + "," +
+                  json_build_pair("algorithm", json_encode_str("Ed25519")) + "," +
+                  json_build_pair("public_key", json_encode_str("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789")) + "," +
+                  json_build_pair("status", json_encode_str("active")) + rb;
+
+    let keys_arr = "[" + k1 + "," + k2 + "]";
+    let part_keys = json_build_pair("keys", keys_arr);
+    let count_num: i64 = 2;
+    let enc_cnt = json_encode_int(count_num);
+    let part_cnt = json_build_pair("count", enc_cnt);
+
+    let resp = lb + part_keys + "," + part_cnt + rb;
+    return resp;
+}

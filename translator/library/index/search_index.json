@@ -1,0 +1,16 @@
+{
+  "packages": [
+    {
+      "name": "collections-cli",
+      "version": "0.1.0",
+      "description": "Sample CLI collection package",
+      "category": "data",
+      "license": "MIT",
+      "integrity": "sha256:unknown",
+      "ai_verdict": "clean",
+      "capabilities": [],
+      "dependencies": {}
+    }
+  ],
+  "count": 1
+}

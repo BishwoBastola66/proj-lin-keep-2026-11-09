@@ -1,0 +1,47 @@
+# ==============================================================================
+# Rubix Control Style (RCS) - Animated Todo List
+# Motion chaining, feel-words, and item entrances
+# ==============================================================================
+
+:root {
+    --accent: #2563EB;
+}
+
+page {
+    bg: var(--bg);
+    padding: 32px;
+}
+
+.todo-card {
+    bg: surface;
+    radius: 12px;
+    shadow: soft;
+    padding: 16px;
+    gap: 8px;
+    slide up 20 on load;
+}
+
+.todo-item {
+    padding: 12px;
+    radius: 8px;
+    border: 1px solid var(--border);
+    fade in after 100ms;
+}
+
+.todo-item:hover {
+    bg: var(--surface-hover);
+    pop;
+}
+
+.urgent {
+    border: 1px solid var(--danger);
+    pulse forever;
+}
+
+button.add {
+    bg: accent;
+    color: white;
+    radius: md;
+    pop on hover;
+    glow accent on focus;
+}

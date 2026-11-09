@@ -1,0 +1,15 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — Reactive State Store (state/store.bix)
+# Named reactive state store with zero integer slot constants.
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+
+fn init_portfolio_state(app: *App): void {
+    State(app, "views", 4820);
+    State(app, "stars", 1250);
+    State(app, "downloads", 28400);
+    State(app, "theme_dark", 1);
+    State(app, "contact_open", 0);
+    State(app, "contact_sent", 0);
+}

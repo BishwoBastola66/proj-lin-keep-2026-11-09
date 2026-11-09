@@ -1,0 +1,117 @@
+# ==============================================================================
+# Webbix Framework — Socket & Network Abstraction (webbix/net/socket.bix)
+# Pure Rubix socket primitives built on top of platform abstraction.
+# ==============================================================================
+
+include "webbix/net/platform.bix";
+
+struct WebbixSocket {
+    fd: i64,
+    family: i64,
+    sock_type: i64,
+    protocol: i64,
+    bound_port: i64,
+    is_listening: i64
+}
+
+fn webbix_socket_create(
+    sock: *WebbixSocket,
+    disp: *PlatformDispatcher,
+    family: i64,
+    sock_type: i64,
+    protocol: i64
+): i64 {
+    let fd = webbix_platform_syscall(disp, LINUX_SYS_SOCKET, family, sock_type, protocol, 0, 0);
+    if fd < 0 {
+        sock.fd = -1;
+        return fd;
+    }
+    sock.fd = fd;
+    sock.family = family;
+    sock.sock_type = sock_type;
+    sock.protocol = protocol;
+    sock.bound_port = 0;
+    sock.is_listening = 0;
+    return fd;
+}
+
+fn webbix_socket_set_reuseaddr(
+    sock: *WebbixSocket,
+    disp: *PlatformDispatcher
+): i64 {
+    if sock.fd < 0 { return -1; }
+    let opt_buf = disp.code_page + 512;
+    set_qword(opt_buf, 0, 1);
+    return webbix_platform_syscall(disp, LINUX_SYS_SETSOCKOPT, sock.fd, SOL_SOCKET, SO_REUSEADDR, opt_buf, 4);
+}
+
+fn webbix_socket_bind(
+    sock: *WebbixSocket,
+    disp: *PlatformDispatcher,
+    port: i64
+): i64 {
+    if sock.fd < 0 { return -1; }
+    # Construct 16-byte sockaddr_in at offset 256 of code page
+    let saddr = disp.code_page + 256;
+    let i = 0;
+    while i < 16 {
+        set_byte(saddr, i, 0);
+        i = i + 1;
+    }
+    # sin_family = AF_INET (2)
+    set_byte(saddr, 0, AF_INET);
+    set_byte(saddr, 1, 0);
+    # sin_port in big-endian network byte order
+    let p_hi = (port / 256) % 256;
+    let p_lo = port % 256;
+    set_byte(saddr, 2, p_hi);
+    set_byte(saddr, 3, p_lo);
+    # sin_addr = 0.0.0.0 (INADDR_ANY)
+
+    let res = webbix_platform_syscall(disp, LINUX_SYS_BIND, sock.fd, saddr, 16, 0, 0);
+    if res == 0 {
+        sock.bound_port = port;
+    }
+    return res;
+}
+
+fn webbix_socket_listen(
+    sock: *WebbixSocket,
+    disp: *PlatformDispatcher,
+    backlog: i64
+): i64 {
+    if sock.fd < 0 { return -1; }
+    let res = webbix_platform_syscall(disp, LINUX_SYS_LISTEN, sock.fd, backlog, 0, 0, 0);
+    if res == 0 {
+        sock.is_listening = 1;
+    }
+    return res;
+}
+
+fn webbix_socket_accept(
+    sock: *WebbixSocket,
+    disp: *PlatformDispatcher
+): i64 {
+    if sock.fd < 0 { return -1; }
+    return webbix_platform_syscall(disp, LINUX_SYS_ACCEPT, sock.fd, 0, 0, 0, 0);
+}
+
+
+fn webbix_socket_write_str(fd: i64, s: str, scratch_buf: i64): i64 {
+    if fd < 0 { return -1; }
+    let slen = s.len();
+    let i = 0;
+    while i < slen {
+        set_byte(scratch_buf, i, s[i]);
+        i = i + 1;
+    }
+    return sys_write(fd, scratch_buf, slen);
+}
+
+fn webbix_socket_close(sock: *WebbixSocket): void {
+    if sock.fd >= 0 {
+        sys_close(sock.fd);
+        sock.fd = -1;
+        sock.is_listening = 0;
+    }
+}

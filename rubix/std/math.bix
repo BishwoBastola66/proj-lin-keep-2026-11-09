@@ -1,0 +1,51 @@
+# ==============================================================================
+# Rubix Standard Library: Math Utilities (std/math.bix)
+# Pure native mathematical algorithms and numeric helpers.
+# ==============================================================================
+
+fn min(a: i64, b: i64): i64 = if a < b { a } else { b };
+
+fn max(a: i64, b: i64): i64 = if a > b { a } else { b };
+
+fn clamp(val: i64, lo: i64, hi: i64): i64 =
+    if val < lo { lo } else { if val > hi { hi } else { val } };
+
+fn abs(val: i64): i64 =
+    if val < 0 { 0 - val } else { val };
+
+fn sign(val: i64): i64 =
+    match val {
+        0 => 0,
+        _ => if val > 0 { 1 } else { -1 }
+    };
+
+fn pow(base: i64, exp: i64): i64 {
+    if exp <= 0 { return 1; }
+    let mut_res = 1;
+    let mut_b = base;
+    let mut_e = exp;
+    while mut_e > 0 {
+        if mut_e % 2 == 1 {
+            mut_res = mut_res * mut_b;
+        }
+        mut_b = mut_b * mut_b;
+        mut_e = mut_e / 2;
+    }
+    return mut_res;
+}
+
+fn gcd(a: i64, b: i64): i64 {
+    let mut_a = if a < 0 { 0 - a } else { a };
+    let mut_b = if b < 0 { 0 - b } else { b };
+    while mut_b != 0 {
+        let t = mut_b;
+        mut_b = mut_a % mut_b;
+        mut_a = t;
+    }
+    return mut_a;
+}
+
+fn lcm(a: i64, b: i64): i64 {
+    if (a == 0) | (b == 0) { return 0; }
+    return (a * b) / gcd(a, b);
+}

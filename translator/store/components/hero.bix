@@ -1,0 +1,17 @@
+# ==============================================================================
+# Hero Section Component (components/hero.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+
+fn comp_hero(app: *App, title: str, subtitle: str): void {
+    Hero(
+        app,
+        "Next-Generation Systems Architecture",
+        title,
+        subtitle,
+        "Explore Projects",
+        "#projects"
+    );
+    Button(app, "★ Star", "stars");
+}

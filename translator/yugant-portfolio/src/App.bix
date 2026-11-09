@@ -1,0 +1,38 @@
+# ==============================================================================
+# Yugant Xettri — Production Native Systems Portfolio
+# File: src/App.bix
+#
+# Primary application entry point. Demonstrates 100% declarative developer
+# syntax with zero framework machinery, zero HTML tags, and zero CSS strings.
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+include "state/store.bix";
+include "components/navbar.bix";
+include "components/footer.bix";
+include "routes/home.bix";
+include "routes/projects.bix";
+include "routes/about.bix";
+include "routes/contact.bix";
+
+let APP_PORT = 8080;
+
+fn create_portfolio_app(): *App {
+    let app = App("Yugant Xettri — Systems Architect");
+    Theme(app, WebTheme.Dark as i64);
+    init_portfolio_state(app);
+
+    render_home_page(app);
+    render_projects_page(app);
+    render_about_page(app);
+    render_contact_page(app);
+
+    return app;
+}
+
+fn main(): i64 {
+    let app = create_portfolio_app();
+    let res = Build(app);
+    if res != 42 { return 1; }
+    return Serve(app, APP_PORT);
+}

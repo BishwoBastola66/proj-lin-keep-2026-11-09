@@ -1,0 +1,25 @@
+# ==============================================================================
+# Rubix Library Publication Guide Page (/publish)
+# File: library/app/src/pages/publish_guide.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "../components/theme.bix";
+include "../components/header.bix";
+include "../components/footer.bix";
+
+fn route_publish_guide_build(app: *App): void {
+    Page(app, "/publish", "Publishing to Rubix Library — Guide");
+        comp_header(app);
+
+        Section(app, "Publishing Your Package", "Publishing is zero-configuration with rix publish");
+            Card(app, "Step 1: Manifest");
+            Paragraph(app, "Define package name, version, and entry in rubix.pkg");
+            Card(app, "Step 2: AI Security Analysis");
+            Paragraph(app, "rix publish automatically runs AI security scanning");
+            Card(app, "Step 3: Publish to Registry");
+            Paragraph(app, "Execute rix publish in your terminal");
+
+        comp_footer(app);
+    End(app);
+}

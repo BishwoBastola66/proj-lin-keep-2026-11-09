@@ -1,0 +1,21 @@
+# ==============================================================================
+# RUBIX EXAMPLE: SOVEREIGN ENTRY & NATIVE MACHINE EXECUTION
+# Written in native Rubix (.bix) with u64 primitives
+# ==============================================================================
+
+fn compute_factorial(n: u64): u64 {
+    if n <= 1 {
+        return 1;
+    }
+    return n * compute_factorial(n - 1);
+}
+
+fn main(): i64 {
+    let result = compute_factorial(5);
+    # 5! = 120
+    print result;
+    if result != 120 {
+        return 1;
+    }
+    return 0;
+}

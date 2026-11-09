@@ -1,0 +1,8 @@
+[package]
+name = "rubix-bootstrap"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+blake3 = "1.5"
+byteorder = "1.5"

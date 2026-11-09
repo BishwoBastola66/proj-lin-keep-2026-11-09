@@ -1,0 +1,337 @@
+
+# ==============================================================================
+# Rubix Standard Library: JSON Encoders & Native Parser (std/json.bix)
+# Pure native JSON builders, formatting, and DOM-style recursive-descent parser.
+# ==============================================================================
+
+# JSON Type Constants
+let JSON_NULL = 0;
+let JSON_BOOL = 1;
+let JSON_INT  = 2;
+let JSON_STR  = 3;
+let JSON_ARR  = 4;
+let JSON_OBJ  = 5;
+
+struct JsonValue {
+    kind: i64,
+    int_val: i64,
+    str_val: str,
+    child_count: i64,
+    keys: *str,
+    values: *ptr
+}
+
+fn json_lbrace(): str {
+    let buf = alloc_buffer(2) as *u8;
+    buf[0] = 123 as u8;
+    buf[1] = 0 as u8;
+    let res = string_from_raw(buf);
+    free_buffer(buf as ptr, 2);
+    return res;
+}
+
+fn json_rbrace(): str {
+    let buf = alloc_buffer(2) as *u8;
+    buf[0] = 125 as u8;
+    buf[1] = 0 as u8;
+    let res = string_from_raw(buf);
+    free_buffer(buf as ptr, 2);
+    return res;
+}
+
+fn json_quote(s: str): str {
+    return "\"" + s + "\"";
+}
+
+fn json_encode_str(s: str): str {
+    return "\"" + s + "\"";
+}
+
+fn json_encode_int(val: i64): str {
+    return "" + val;
+}
+
+fn json_encode_bool(val: bool): str {
+    if val { return "true"; }
+    return "false";
+}
+
+fn json_encode_null(): str {
+    return "null";
+}
+
+fn json_build_pair(key: str, val_json: str): str {
+    return "\"" + key + "\": " + val_json;
+}
+
+fn json_build_obj2(k1: str, v1: str, k2: str, v2: str): str {
+    return json_lbrace() + "\"" + k1 + "\": " + v1 + ", \"" + k2 + "\": " + v2 + json_rbrace();
+}
+
+fn json_build_obj3(k1: str, v1: str, k2: str, v2: str, k3: str, v3: str): str {
+    return json_lbrace() + "\"" + k1 + "\": " + v1 + ", \"" + k2 + "\": " + v2 + ", \"" + k3 + "\": " + v3 + json_rbrace();
+}
+
+fn json_build_arr2(v1: str, v2: str): str {
+    return "[" + v1 + ", " + v2 + "]";
+}
+
+fn json_build_arr3(v1: str, v2: str, v3: str): str {
+    return "[" + v1 + ", " + v2 + ", " + v3 + "]";
+}
+
+
+fn json_str_slice(s: str, start: i64, len: i64): str {
+    if len <= 0 { return ""; }
+    let buf = alloc_buffer(len + 1) as *u8;
+    let i = 0;
+    while i < len {
+        buf[i] = s[start + i];
+        i = i + 1;
+    }
+    buf[len] = 0 as u8;
+    let res = string_from_raw(buf);
+    free_buffer(buf as ptr, len + 1);
+    return res;
+}
+
+# --- JSON Parser Implementation ---
+
+fn json_new(k: i64): *JsonValue {
+    let v = alloc_buffer(48) as *JsonValue;
+    v.kind = k;
+    v.int_val = 0;
+    v.str_val = "";
+    v.child_count = 0;
+    v.keys = alloc_buffer(8) as *str;
+    v.values = alloc_buffer(8) as *ptr;
+    return v;
+}
+
+fn json_skip_ws(s: str, p: *i64, len: i64): void {
+    let cur = *p;
+    let loop_ok = 1;
+    while (cur < len) & (loop_ok == 1) {
+        let b = s[cur] as i64;
+        if (b == 32) | (b == 9) | (b == 10) | (b == 13) {
+            cur = cur + 1;
+        } else {
+            loop_ok = 0;
+        }
+    }
+    *p = cur;
+}
+
+fn json_parse_str(s: str, p: *i64, len: i64): str {
+    let cur = *p;
+    if cur >= len { return ""; }
+    if (s[cur] as i64) != 34 { return ""; }
+    cur = cur + 1;
+    let start = cur;
+    let loop_ok = 1;
+    while (cur < len) & (loop_ok == 1) {
+        let b = s[cur] as i64;
+        if b == 34 {
+            loop_ok = 0;
+        } else {
+            if b == 92 {
+                cur = cur + 2;
+            } else {
+                cur = cur + 1;
+            }
+        }
+    }
+    let slen = cur - start;
+    if cur < len { cur = cur + 1; }
+    *p = cur;
+    return json_str_slice(s, start, slen);
+}
+
+fn json_parse_val(s: str, p: *i64, len: i64): *JsonValue {
+    json_skip_ws(s, p, len);
+    let cur = *p;
+    if cur >= len { return json_new(JSON_NULL); }
+    let b = s[cur] as i64;
+
+    if b == 34 {
+        let res_str = json_parse_str(s, p, len);
+        let v = json_new(JSON_STR);
+        v.str_val = res_str;
+        return v;
+    }
+
+    if b == 116 {
+        *p = cur + 4;
+        let v = json_new(JSON_BOOL);
+        v.int_val = 1;
+        return v;
+    }
+
+    if b == 102 {
+        *p = cur + 5;
+        let v = json_new(JSON_BOOL);
+        v.int_val = 0;
+        return v;
+    }
+
+    if b == 110 {
+        *p = cur + 4;
+        return json_new(JSON_NULL);
+    }
+
+    if b == 123 {
+        cur = cur + 1;
+        *p = cur;
+        let obj = json_new(JSON_OBJ);
+        let max_cap = 64;
+        obj.keys = alloc_buffer(max_cap * 8) as *str;
+        obj.values = alloc_buffer(max_cap * 8) as *ptr;
+        let count = 0;
+
+        json_skip_ws(s, p, len);
+        if (*p < len) & ((s[*p] as i64) == 125) {
+            *p = *p + 1;
+            return obj;
+        }
+
+        let parsing_obj = 1;
+        while (*p < len) & (parsing_obj == 1) {
+            json_skip_ws(s, p, len);
+            if (s[*p] as i64) == 125 {
+                *p = *p + 1;
+                parsing_obj = 0;
+            } else {
+                let k = json_parse_str(s, p, len);
+                json_skip_ws(s, p, len);
+                if (*p < len) & ((s[*p] as i64) == 58) {
+                    *p = *p + 1;
+                }
+                let val = json_parse_val(s, p, len);
+                if count < max_cap {
+                    obj.keys[count] = k;
+                    obj.values[count] = val as ptr;
+                    count = count + 1;
+                }
+                json_skip_ws(s, p, len);
+                if (*p < len) & ((s[*p] as i64) == 44) {
+                    *p = *p + 1;
+                } else {
+                    if (*p < len) & ((s[*p] as i64) == 125) {
+                        *p = *p + 1;
+                        parsing_obj = 0;
+                    }
+                }
+            }
+        }
+        obj.child_count = count;
+        return obj;
+    }
+
+    if b == 91 {
+        cur = cur + 1;
+        *p = cur;
+        let arr = json_new(JSON_ARR);
+        let max_cap = 64;
+        arr.values = alloc_buffer(max_cap * 8) as *ptr;
+        let count = 0;
+
+        json_skip_ws(s, p, len);
+        if (*p < len) & ((s[*p] as i64) == 93) {
+            *p = *p + 1;
+            return arr;
+        }
+
+        let parsing_arr = 1;
+        while (*p < len) & (parsing_arr == 1) {
+            json_skip_ws(s, p, len);
+            if (s[*p] as i64) == 93 {
+                *p = *p + 1;
+                parsing_arr = 0;
+            } else {
+                let val = json_parse_val(s, p, len);
+                if count < max_cap {
+                    arr.values[count] = val as ptr;
+                    count = count + 1;
+                }
+                json_skip_ws(s, p, len);
+                if (*p < len) & ((s[*p] as i64) == 44) {
+                    *p = *p + 1;
+                } else {
+                    if (*p < len) & ((s[*p] as i64) == 93) {
+                        *p = *p + 1;
+                        parsing_arr = 0;
+                    }
+                }
+            }
+        }
+        arr.child_count = count;
+        return arr;
+    }
+
+    let is_neg = 0;
+    if b == 45 {
+        is_neg = 1;
+        cur = cur + 1;
+    }
+    let num = 0;
+    let loop_num = 1;
+    while (cur < len) & (loop_num == 1) {
+        let nb = s[cur] as i64;
+        if (nb >= 48) & (nb <= 57) {
+            num = (num * 10) + (nb - 48);
+            cur = cur + 1;
+        } else {
+            loop_num = 0;
+        }
+    }
+    *p = cur;
+    if is_neg == 1 { num = 0 - num; }
+    let v = json_new(JSON_INT);
+    v.int_val = num;
+    return v;
+}
+
+fn json_parse(json_str: str): *JsonValue {
+    let p = 0;
+    let l = string_length(json_str);
+    return json_parse_val(json_str, &p, l);
+}
+
+fn json_get(obj: *JsonValue, key: str): *JsonValue {
+    if obj.kind != JSON_OBJ { return json_new(JSON_NULL); }
+    let i = 0;
+    while i < obj.child_count {
+        if obj.keys[i] == key {
+            return (obj.values[i] as ptr) as *JsonValue;
+        }
+        i = i + 1;
+    }
+    return json_new(JSON_NULL);
+}
+
+fn json_get_str(obj: *JsonValue, key: str): str {
+    let v = json_get(obj, key);
+    return v.str_val;
+}
+
+fn json_get_int(obj: *JsonValue, key: str): i64 {
+    let v = json_get(obj, key);
+    return v.int_val;
+}
+
+fn json_get_bool(obj: *JsonValue, key: str): bool {
+    let v = json_get(obj, key);
+    return v.int_val == 1;
+}
+
+fn json_arr_len(arr: *JsonValue): i64 {
+    if arr.kind != JSON_ARR { return 0; }
+    return arr.child_count;
+}
+
+fn json_arr_get(arr: *JsonValue, idx: i64): *JsonValue {
+    if (arr.kind != JSON_ARR) | (idx < 0) | (idx >= arr.child_count) {
+        return json_new(JSON_NULL);
+    }
+    return (arr.values[idx] as ptr) as *JsonValue;
+}

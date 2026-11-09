@@ -1,0 +1,32 @@
+# ==============================================================================
+# Rubix Library Package Detail Page (/packages/collections)
+# File: library/app/src/pages/package_detail.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "../components/theme.bix";
+include "../components/header.bix";
+include "../components/footer.bix";
+include "../components/badge.bix";
+
+fn route_package_detail_build(app: *App): void {
+    Page(app, "/packages/collections", "collections v1.0.0 — Rubix Library");
+        comp_header(app);
+
+        Section(app, "collections v1.0.0", "Install command: rix add collections");
+            comp_badge_category(app, "data");
+            comp_badge_verdict(app, "clean");
+
+        Section(app, "Installation & Usage", "Run rix add collections in your project root");
+            Card(app, "Terminal Installation");
+            Paragraph(app, "rix add collections");
+
+        Section(app, "Security & Verification", "Content integrity, signatures, and capabilities");
+            Card(app, "Integrity Hash");
+            Paragraph(app, "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+            Card(app, "Signature Status");
+            Paragraph(app, "Signed by @rubix-core via Ed25519");
+
+        comp_footer(app);
+    End(app);
+}

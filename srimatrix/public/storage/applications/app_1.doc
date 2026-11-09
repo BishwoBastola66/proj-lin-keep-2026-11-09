@@ -1,0 +1,64 @@
+﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>job application</title></head>
+<body>
+<div style="text-align: center; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; margin-bottom: 22px;">
+  <img src="/srimatrix-health-logo.png" alt="SriMatrix Health" style="height: 56px; margin: 0 auto 6px auto; display: block; object-fit: contain;">
+  <h1 style="font-size: 21px; font-weight: bold; margin: 0; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; letter-spacing: -0.01em;">Srimatrix Health</h1>
+  <p style="font-size: 11px; color: #475569; margin: 2px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Email: info@srimatrixhealth.com | Website: www.srimatrixhealth.com</p>
+</div>
+
+<p style="margin: 0 0 14px 0; font-size: 14px;"><strong>Date:</strong> 08/25/2026</p>
+<p style="margin: 0 0 18px 0; font-size: 14px;"><strong>To:</strong> </p>
+
+<p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6;">
+  Start typing your custom letter content here...
+</p>
+<br clear="all" style="page-break-before:always;" />
+<div style="text-align: center; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; margin-bottom: 18px;">
+  <img src="/srimatrix-health-logo.png" alt="SriMatrix Health" style="height: 48px; margin: 0 auto 4px auto; display: block; object-fit: contain;" />
+  <h2 style="font-size: 17px; font-weight: bold; margin: 0; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Srimatrix Health LLC</h2>
+  <p style="font-size: 11px; color: #475569; margin: 2px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Healthcare Communications & Education Division</p>
+</div>
+
+<h3 style="font-size: 15px; font-weight: bold; margin: 0 0 8px 0; color: #0f172a;">Employment Terms</h3>
+<p style="margin: 0 0 12px 0; font-size: 13.5px; text-align: justify; line-height: 1.6;">
+  You are expected to perform your duties professionally and in accordance with the policies and procedures of Srimatrix Health. This offer is contingent upon your maintaining appropriate authorization to work in the United States and satisfying any applicable employment requirements.
+</p>
+<p style="margin: 0 0 12px 0; font-size: 13.5px; text-align: justify; line-height: 1.6;">
+  For an employee working under F-1 Optional Practical Training (OPT), employment is subject to the requirements and limitations applicable to the student's OPT authorization. The employee is responsible for maintaining valid immigration and employment authorization throughout the period of employment.
+</p>
+<p style="margin: 0 0 12px 0; font-size: 13.5px; text-align: justify; line-height: 1.6;">
+  Srimatrix Health will provide appropriate supervision, assignments, and professional guidance related to the position.
+</p>
+<p style="margin: 0 0 12px 0; font-size: 13.5px; text-align: justify; line-height: 1.6;">
+  Please indicate your acceptance by signing and returning this letter by <strong>08/28/2026</strong>.
+</p>
+<p style="margin: 0 0 20px 0; font-size: 13.5px; text-align: justify; line-height: 1.6;">
+  We are excited about the opportunity to have you join our team and look forward to your contributions to our healthcare content and communications initiatives.
+</p>
+
+<!-- Sign-off & Clean Blank Signature Space -->
+<div style="margin: 0 0 26px 0; line-height: 1.5; font-size: 13.5px;">
+  <p style="margin: 0 0 6px 0;">Sincerely,</p>
+  <!-- Blank space for signature as requested -->
+  <div style="height: 52px;"></div>
+  <p style="margin: 0; font-weight: bold; color: #0f172a;">Suneel Sah</p>
+  <p style="margin: 0; color: #334155;">Director</p>
+  <p style="margin: 0; color: #334155;">Srimatrix Health LLC</p>
+  <p style="margin: 0; color: #475569; font-size: 12px;">Email: ssah@srimatrixhealth.com</p>
+</div>
+
+<!-- Candidate Acceptance Section -->
+<div style="border-top: 1px solid #cbd5e1; padding-top: 14px; margin-top: 14px;">
+  <h3 style="font-size: 15px; font-weight: bold; margin: 0 0 8px 0; color: #0f172a;">Candidate Acceptance</h3>
+  <p style="margin: 0 0 16px 0; font-size: 13.5px; text-align: justify; line-height: 1.6;">
+    I, <strong>Kristina KC</strong>, accept the position of <strong>Healthcare Content Writing and Communications Intern</strong> with Srimatrix Health under the terms described in this letter.
+  </p>
+  
+  <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
+    <p style="margin: 0;"><strong>Signature:</strong> ____________________________________________________</p>
+    <p style="margin: 0;"><strong>Printed Name:</strong> ____________________________________________________</p>
+    <p style="margin: 0;"><strong>Date:</strong> ____________________________________________________</p>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,29 @@
+# ==============================================================================
+# Rubix Library Homepage Route (/)
+# File: library/app/src/pages/home.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "../components/theme.bix";
+include "../components/header.bix";
+include "../components/footer.bix";
+include "../components/search_bar.bix";
+include "../components/category_pill.bix";
+include "../components/package_card.bix";
+
+fn route_home_build(app: *App): void {
+    Page(app, "/", "Rubix Library — Package Ecosystem");
+        comp_header(app);
+        comp_search_bar(app);
+
+        Section(app, "Explore by Category", "12 curated domains of native Rubix software");
+            comp_category_pills(app);
+
+        Section(app, "Featured Packages", "Verified, AI-scanned packages ready for instant install");
+            comp_package_card(app, "collections", "1.0.0", "High-performance persistent collections & HashMaps", "data");
+            comp_package_card(app, "webbix-core", "1.0.0", "Reactive declarative web engine & DOM bindings", "web");
+            comp_package_card(app, "tensor-ai", "0.5.0", "INT8 quantized matrix multiplication kernels", "ai");
+
+        comp_footer(app);
+    End(app);
+}

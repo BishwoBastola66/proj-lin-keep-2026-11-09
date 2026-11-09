@@ -1,0 +1,11 @@
+# ==============================================================================
+# Rubix Library Footer Component
+# File: library/app/src/components/footer.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "theme.bix";
+
+fn comp_footer(app: *App): void {
+    Footer(app, "Rubix Library — Security as Substrate. Built natively with Rubix and Cloudflare.");
+}

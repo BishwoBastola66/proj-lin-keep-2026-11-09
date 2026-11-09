@@ -1,0 +1,37 @@
+use std.collections;
+
+fn bench_vectors(count: i64): i64 {
+    mut i = 0;
+    mut checksum = 0;
+    while i < count {
+        let v = vec_new(8);
+        vec_push(v, i);
+        vec_push(v, i * 2);
+        vec_push(v, i * 3);
+        checksum = checksum + vec_get(v, 0) + vec_get(v, 1) + vec_get(v, 2);
+        i = i + 1;
+    }
+    return checksum;
+}
+
+fn bench_maps(count: i64): i64 {
+    mut i = 0;
+    mut checksum = 0;
+    while i < count {
+        let m = map_new(16);
+        map_put(m, 1, i);
+        map_put(m, 2, i + 10);
+        checksum = checksum + map_get(m, 1) + map_get(m, 2);
+        i = i + 1;
+    }
+    return checksum;
+}
+
+fn main(): i64 {
+    let cv = bench_vectors(5000);
+    let cm = bench_maps(5000);
+    print "Collections benchmark completed. Checksums:";
+    print cv;
+    print cm;
+    return 0;
+}

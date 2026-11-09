@@ -1,0 +1,71 @@
+# ==============================================================================
+# Webbix Framework — Component & Virtual DOM Model (webbix/components/component.bix)
+# Pure Rubix implementation of virtual nodes, component lifecycle,
+# event binding, and component composition.
+# ==============================================================================
+
+# Standard Web Tag IDs (aligned with std/web.bix)
+let WEBMIX_TAG_DIV     = 1;
+let WEBMIX_TAG_SPAN    = 2;
+let WEBMIX_TAG_H1      = 3;
+let WEBMIX_TAG_P       = 4;
+let WEBMIX_TAG_BUTTON  = 5;
+let WEBMIX_TAG_INPUT   = 6;
+let WEBMIX_TAG_SECTION = 7;
+let WEBMIX_TAG_NAV     = 8;
+let WEBMIX_TAG_MAIN    = 9;
+
+struct WebbixVNode {
+    node_id: i64,
+    tag_id: i64,
+    parent_id: i64,
+    child_count: i64,
+    event_mask: i64,
+    state_ref: i64,
+    is_rendered: i64
+}
+
+struct WebbixComponent {
+    comp_id: i64,
+    comp_type: i64,
+    root_node_id: i64,
+    state_key: i64,
+    child_comp_count: i64
+}
+
+fn webbix_vnode_init(node: *WebbixVNode, node_id: i64, tag_id: i64, parent_id: i64): void {
+    node.node_id = node_id;
+    node.tag_id = tag_id;
+    node.parent_id = parent_id;
+    node.child_count = 0;
+    node.event_mask = 0;
+    node.state_ref = 0;
+    node.is_rendered = 1;
+}
+
+fn webbix_vnode_add_listener(node: *WebbixVNode, event_type: i64): void {
+    node.event_mask = node.event_mask | (1 << event_type);
+}
+
+fn webbix_vnode_has_listener(node: *WebbixVNode, event_type: i64): i64 {
+    let mask = 1 << event_type;
+    return if (node.event_mask & mask) != 0 { 1 } else { 0 };
+}
+
+fn webbix_component_init(comp: *WebbixComponent, comp_id: i64, comp_type: i64, state_key: i64): void {
+    comp.comp_id = comp_id;
+    comp.comp_type = comp_type;
+    comp.root_node_id = 0;
+    comp.state_key = state_key;
+    comp.child_comp_count = 0;
+}
+
+fn webbix_component_render(comp: *WebbixComponent, root_vnode: *WebbixVNode, state_val: i64): void {
+    comp.root_node_id = root_vnode.node_id;
+    root_vnode.state_ref = state_val;
+    root_vnode.is_rendered = 1;
+}
+
+fn webbix_component_compose_child(parent_comp: *WebbixComponent, child_comp: *WebbixComponent): void {
+    parent_comp.child_comp_count = parent_comp.child_comp_count + 1;
+}

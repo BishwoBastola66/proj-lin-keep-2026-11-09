@@ -1,0 +1,80 @@
+# ==============================================================================
+# Rubix Test Suite - End-to-End Architectural Pipeline Integration
+# File: tests/test_sir_pipeline.bix
+#
+# Validates:
+#   1. Unified execution of Computation, Resources, and Communication.
+#   2. Pure mathematical calculation with zero side effects.
+#   3. Affine ownership transfer and deterministic resource cleanup.
+#   4. Capability-governed system boundaries.
+# ==============================================================================
+
+# 1. Computation Stratum: Pure Mathematical Logic
+fn math_collatz(n: i64): i64 effect(pure) {
+    let mut_n = n;
+    let steps = 0;
+    while mut_n > 1 {
+        if (mut_n % 2) == 0 {
+            mut_n = mut_n / 2;
+        } else {
+            mut_n = (mut_n * 3) + 1;
+        }
+        steps = steps + 1;
+    }
+    return steps;
+}
+
+# 2. Resource Stratum: Affine Single-Ownership Buffer
+struct DataBuffer {
+    ptr_val: ptr,
+    capacity: i64,
+    len: i64
+}
+
+fn create_buffer(cap: i64): *DataBuffer effect(pure) {
+    let raw = alloc_buffer(cap);
+    let b = alloc_buffer(24) as *DataBuffer;
+    b.ptr_val = raw;
+    b.capacity = cap;
+    b.len = 0;
+    return b;
+}
+
+fn finalize_buffer(b: *DataBuffer): i64 effect(pure) {
+    let cap = b.capacity;
+    free_buffer(b.ptr_val, cap);
+    free_buffer(b as ptr, 24);
+    return cap;
+}
+
+# 3. Communication Stratum: Capability-Governed Output
+fn secure_report(name: str, metric: i64) with(CapFs) effect(io) {
+    println("=== Rubix Architectural Report ===");
+    println(name);
+    print_int(metric);
+    println("");
+    return 0;
+}
+
+fn main(): i64 effect(io, syscall) with(CapFs) {
+    # Phase 1: Pure Computation
+    let steps = math_collatz(27);
+    if steps != 111 {
+        println("FAIL: Expected 111 Collatz steps for 27");
+        return 1;
+    }
+
+    # Phase 2: Affine Resource Management
+    let buf = create_buffer(1024);
+    let freed_cap = finalize_buffer(buf);
+    if freed_cap != 1024 {
+        println("FAIL: Expected 1024 freed capacity");
+        return 2;
+    }
+
+    # Phase 3: Capability-Governed Communication
+    secure_report("Collatz(27) steps:", steps);
+
+    println("=== Full End-to-End Pipeline Integration Passed Cleanly ===");
+    return 0;
+}

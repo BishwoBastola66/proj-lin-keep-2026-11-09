@@ -1,0 +1,17 @@
+# ==============================================================================
+# Navigation Bar Component (components/navbar.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+
+fn comp_navbar(app: *App, brand: str): void {
+    Navbar(
+        app,
+        brand,
+        "Native Web",
+        "Overview",
+        "#overview",
+        "Projects",
+        "#projects"
+    );
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "env": {
+    "SUPABASE_URL": "https://eliistkuiuvtmmqcckra.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsaWlzdGt1aXV2dG1tcWNja3JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzMTM0NjMsImV4cCI6MjEwNTg4OTQ2M30.65ah7bD3m3oBpfKs3DjmPIyP51Y3vtvOBFIk0JbqkZY",
+    "RESEND_API_KEY": "re_4DYp85iR_9Vo5MMPQysG9UvttdS5w3BGS",
+    "RESEND_FROM_EMAIL": "Gyanav Solutions <noreply@gyanavsolutions.com>",
+    "ADMIN_APPLIED_EMAIL": "hr@gyanavsolutions.com",
+    "ADMIN_CONTACT_EMAIL": "contact@gyanavsolutions.com"
+  },
+  "build": {
+    "env": {
+      "SUPABASE_URL": "https://eliistkuiuvtmmqcckra.supabase.co",
+      "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsaWlzdGt1aXV2dG1tcWNja3JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzMTM0NjMsImV4cCI6MjEwNTg4OTQ2M30.65ah7bD3m3oBpfKs3DjmPIyP51Y3vtvOBFIk0JbqkZY",
+      "RESEND_API_KEY": "re_4DYp85iR_9Vo5MMPQysG9UvttdS5w3BGS",
+      "RESEND_FROM_EMAIL": "Gyanav Solutions <noreply@gyanavsolutions.com>",
+      "ADMIN_APPLIED_EMAIL": "hr@gyanavsolutions.com",
+      "ADMIN_CONTACT_EMAIL": "contact@gyanavsolutions.com"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+# ==============================================================================
+# Rubix Library Web Registry Application
+# File: library/app/src/main.bix
+# Consumes theme/white.tokens.json and mounts all pages
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "pages/home.bix";
+include "pages/search.bix";
+include "pages/package_detail.bix";
+include "pages/publish_guide.bix";
+
+fn app_create(): *App {
+    let app = App("Rubix Library — Package Ecosystem");
+    route_home_build(app);
+    route_search_build(app);
+    route_package_detail_build(app);
+    route_publish_guide_build(app);
+    return app;
+}
+
+let APP_PORT = 8080;
+
+fn main(): i64 {
+    let app = app_create();
+    let res = Build(app);
+    if res != 42 {
+        println("[RUBIX APP ERROR] Failed to build Web UI IR");
+        return 1;
+    }
+    println("[RUBIX APP] Webbix Library Frontend built successfully.");
+    return 0;
+}

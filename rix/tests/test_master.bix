@@ -1,0 +1,75 @@
+# ==============================================================================
+# Rix — Master Verification Test Suite (tests/test_master.bix)
+# ==============================================================================
+
+fn test_run_manifest(): Integer {
+    let toml = "[package]\nname = \"demo_app\"\nversion = \"0.1.0\"\n\n[dependencies]\nwebbix = \"1.0.0\"\n"
+    let name = manifest_parse_field(toml, "name")
+    if name != "demo_app" { return 1 }
+    let ver = manifest_parse_field(toml, "version")
+    if ver != "0.1.0" { return 2 }
+    if manifest_has_dep(toml, "webbix") != 1 { return 3 }
+    if manifest_has_dep(toml, "missing") != 0 { return 4 }
+    let added = manifest_add_dep(toml, "logger", "0.2.0")
+    if manifest_has_dep(added, "logger") != 1 { return 5 }
+    let removed = manifest_remove_dep(added, "webbix")
+    if manifest_has_dep(removed, "webbix") != 0 { return 6 }
+    0
+}
+
+fn test_run_lockfile(): Integer {
+    let hash1 = lockfile_compute_hash("webbix-1.0.0")
+    let hash2 = lockfile_compute_hash("webbix-1.0.0")
+    if hash1 != hash2 { return 1 }
+    let lock_text = lockfile_generate("my_app", "0.1.0", "webbix = { version = \"1.0.0\" }\n")
+    if string_length(lock_text) < 50 { return 2 }
+    if lockfile_verify_hash("rix-1234", "rix-1234") != 1 { return 3 }
+    if lockfile_verify_hash("rix-1234", "rix-tampered") != 0 { return 4 }
+    0
+}
+
+fn test_run_resolver(): Integer {
+    if resolve_version_match("v1.0.0", "v1.0.0") != 1 { return 1 }
+    if resolve_version_match("v1.0.0", "v2.0.0") != 0 { return 2 }
+    if resolve_version_match("v1.5.2", "*") != 1 { return 3 }
+    if resolve_version_match("v1.2.3", "^v1.0.0") != 1 { return 4 }
+    if resolve_version_match("v2.0.0", "^v1.0.0") != 0 { return 5 }
+    let entry = resolve_format_package_entry("webbix", "v1.0.0", "local")
+    if string_length(entry) < 20 { return 6 }
+    0
+}
+
+fn main(): Integer {
+    print "======================================================================"
+    print "✦ Rix Package Manager & Executor Verification Test Suite"
+    print "======================================================================"
+    
+    print "Running: Manifest Processor..."
+    let m = test_run_manifest()
+    if m != 0 {
+        print "  [FAIL] Manifest failed with code " + int_to_string(m)
+        return 1
+    }
+    print "  [PASS] Manifest: field extraction, dependency tracking, add/remove"
+    
+    print "Running: Lockfile Engine..."
+    let l = test_run_lockfile()
+    if l != 0 {
+        print "  [FAIL] Lockfile failed with code " + int_to_string(l)
+        return 1
+    }
+    print "  [PASS] Lockfile: deterministic hashing, generation, checksum verification"
+    
+    print "Running: Dependency Resolver..."
+    let r = test_run_resolver()
+    if r != 0 {
+        print "  [FAIL] Resolver failed with code " + int_to_string(r)
+        return 1
+    }
+    print "  [PASS] Resolver: exact match, wildcard, semver caret constraints"
+    
+    print "======================================================================"
+    print "ALL RIX INTERNAL UNIT TEST SUITES PASSED (100% SUCCESS)"
+    print "======================================================================"
+    0
+}

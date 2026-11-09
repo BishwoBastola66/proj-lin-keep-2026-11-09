@@ -1,0 +1,103 @@
+# ==============================================================================
+# Rubix Standard Library: Web Document Model & Reactive DOM (std/web.bix)
+# Pure Rubix implementation of the W3C-aligned document tree, element mutations,
+# attribute state, event propagation, and HTML5 serialization.
+#
+# Part of the REX -> Browser -> Pixels architecture.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# DOM Mutation Operation Constants
+# ------------------------------------------------------------------------------
+let DOM_MUT_CREATE_ELEMENT = 1;
+let DOM_MUT_SET_ID         = 2;
+let DOM_MUT_SET_CLASS      = 3;
+let DOM_MUT_SET_ATTRIBUTE  = 4;
+let DOM_MUT_SET_TEXT       = 5;
+let DOM_MUT_SET_STYLE      = 6;
+let DOM_MUT_APPEND_CHILD   = 7;
+let DOM_MUT_REMOVE_CHILD   = 8;
+let DOM_MUT_ADD_LISTENER   = 9;
+
+# ------------------------------------------------------------------------------
+# DOM Event Constants
+# ------------------------------------------------------------------------------
+let DOM_EVENT_CLICK       = 1;
+let DOM_EVENT_INPUT       = 2;
+let DOM_EVENT_CHANGE      = 3;
+let DOM_EVENT_KEYDOWN     = 4;
+let DOM_EVENT_KEYUP       = 5;
+let DOM_EVENT_FOCUS       = 6;
+let DOM_EVENT_BLUR        = 7;
+let DOM_EVENT_SUBMIT      = 8;
+let DOM_EVENT_RESIZE      = 9;
+let DOM_EVENT_SCROLL      = 10;
+let DOM_EVENT_TRANS_END   = 11;
+let DOM_EVENT_ANIM_END    = 12;
+
+# ------------------------------------------------------------------------------
+# Web Document Model Types
+# ------------------------------------------------------------------------------
+struct DomElement {
+    node_id: i64,
+    parent_id: i64,
+    tag_id: i64,          # 1=div, 2=span, 3=h1, 4=p, 5=button, 6=input, 7=section, 8=nav, 9=main, 10=ul, 11=li
+    is_active: i64,       # 1=alive, 0=removed
+    child_count: i64,
+    event_mask: i64,      # Bitmask of attached event listener types
+    state_flags: i64      # 1=dirty, 2=focused, 4=hovered
+}
+
+struct DomMutationRecord {
+    op: i64,
+    target_id: i64,
+    param1: i64,
+    param2: i64
+}
+
+# ------------------------------------------------------------------------------
+# Global DOM Arena & Mutation Log (Stateful Host-Linked Buffer)
+# ------------------------------------------------------------------------------
+let MAX_DOM_NODES = 256;
+let MAX_DOM_MUTATIONS = 1024;
+
+# Allocates or accesses node slot
+fn dom_init_node(node_id: i64, tag_id: i64, parent_id: i64): i64 {
+    if (node_id <= 0) | (node_id >= MAX_DOM_NODES) {
+        return -1;
+    }
+    return node_id;
+}
+
+# Tag ID mappings:
+# 1="div", 2="span", 3="h1", 4="p", 5="button", 6="input", 7="section", 8="nav", 9="main", 10="ul", 11="li"
+fn dom_tag_name(tag_id: i64): str {
+    if tag_id == 1 { return "div"; }
+    if tag_id == 2 { return "span"; }
+    if tag_id == 3 { return "h1"; }
+    if tag_id == 4 { return "p"; }
+    if tag_id == 5 { return "button"; }
+    if tag_id == 6 { return "input"; }
+    if tag_id == 7 { return "section"; }
+    if tag_id == 8 { return "nav"; }
+    if tag_id == 9 { return "main"; }
+    if tag_id == 10 { return "ul"; }
+    if tag_id == 11 { return "li"; }
+    return "div";
+}
+
+fn dom_event_name(ev_type: i64): str {
+    if ev_type == DOM_EVENT_CLICK     { return "click"; }
+    if ev_type == DOM_EVENT_INPUT     { return "input"; }
+    if ev_type == DOM_EVENT_CHANGE    { return "change"; }
+    if ev_type == DOM_EVENT_KEYDOWN   { return "keydown"; }
+    if ev_type == DOM_EVENT_KEYUP     { return "keyup"; }
+    if ev_type == DOM_EVENT_FOCUS     { return "focus"; }
+    if ev_type == DOM_EVENT_BLUR      { return "blur"; }
+    if ev_type == DOM_EVENT_SUBMIT    { return "submit"; }
+    if ev_type == DOM_EVENT_RESIZE    { return "resize"; }
+    if ev_type == DOM_EVENT_SCROLL    { return "scroll"; }
+    if ev_type == DOM_EVENT_TRANS_END { return "transitionend"; }
+    if ev_type == DOM_EVENT_ANIM_END  { return "animationend"; }
+    return "custom";
+}

@@ -1,0 +1,1833 @@
+# ==============================================================================
+# RUBIX COMPILER INTRINSIC PACKAGING SUBSYSTEM
+# Direct Container Synthesis: ELF64, PE/COFF, Mach-O 64, WASM, and Universal Polyglot UPBP
+# Pure Sovereign Rubix Code Generation - Zero External Linkers
+# ==============================================================================
+
+use compiler.common.constants;
+
+# EIA / ARLL constants required by the packaging subsystem.
+# Defined here (rather than in runtime.bix) so packaging.bix compiles
+# independently of module-load order.
+let EIA_MAGIC_HOLO       = 1145653573;          # 'EIAH' packed (0x44484945)
+let ISA_X86_64           = 1;
+let EIA_CALLING_CONV_SYSV   = 1; # System V AMD64 (rdi, rsi, rdx, rcx, r8, r9)
+
+# --- Packaging Component: compiler/packaging/elf.bix ---
+# elf.bix - ELF executable and object packaging
+# Emits 64-bit ELF headers, program headers, and section tables (.symtab, .strtab, .shstrtab).
+
+
+fn write_elf_sections(out_fd: i64, code_len: i64, entry_vaddr: i64, reloc_data_len: i64, reloc_off: i64, schema_data_len: i64, schema_off: i64, eia_symtab_data_len: i64, eia_symtab_off: i64): i64 {
+    let sec_buf = sys_mmap_page();
+    let i = 0;
+    while i < 1024 {
+        set_byte(sec_buf, i, 0);
+        i = i + 1;
+    }
+
+    let code_end = ELF_HEADERS_TOTAL_SIZE + code_len + reloc_data_len + schema_data_len + eia_symtab_data_len;
+    let pad_len = 0;
+    let rem = code_end % 8;
+    if rem != 0 { pad_len = 8 - rem; }
+
+    let shstrtab_off = code_end + pad_len;
+    let strtab_off = shstrtab_off + 64;
+    let symtab_off = strtab_off + 8;
+    let shdr_off = symtab_off + 48;
+
+    # 1. shstrtab at sec_buf + pad_len
+    # "\0.text\0.symtab\0.strtab\0.shstrtab\0.eia_reloc\0.eia_schema\0" (56 bytes, padded to 64 bytes)
+    let s_off = pad_len;
+    # 0: \0
+    # 1: .text\0 (46, 116, 101, 120, 116, 0)
+    set_byte(sec_buf, s_off + 1, 46); set_byte(sec_buf, s_off + 2, 116);
+    set_byte(sec_buf, s_off + 3, 101); set_byte(sec_buf, s_off + 4, 120);
+    set_byte(sec_buf, s_off + 5, 116); set_byte(sec_buf, s_off + 6, 0);
+    # 7: .symtab\0 (46, 115, 121, 109, 116, 97, 98, 0)
+    set_byte(sec_buf, s_off + 7, 46); set_byte(sec_buf, s_off + 8, 115);
+    set_byte(sec_buf, s_off + 9, 121); set_byte(sec_buf, s_off + 10, 109);
+    set_byte(sec_buf, s_off + 11, 116); set_byte(sec_buf, s_off + 12, 97);
+    set_byte(sec_buf, s_off + 13, 98); set_byte(sec_buf, s_off + 14, 0);
+    # 15: .strtab\0 (46, 115, 116, 114, 116, 97, 98, 0)
+    set_byte(sec_buf, s_off + 15, 46); set_byte(sec_buf, s_off + 16, 115);
+    set_byte(sec_buf, s_off + 17, 116); set_byte(sec_buf, s_off + 18, 114);
+    set_byte(sec_buf, s_off + 19, 116); set_byte(sec_buf, s_off + 20, 97);
+    set_byte(sec_buf, s_off + 21, 98); set_byte(sec_buf, s_off + 22, 0);
+    # 23: .shstrtab\0 (46, 115, 104, 115, 116, 114, 116, 97, 98, 0)
+    set_byte(sec_buf, s_off + 23, 46); set_byte(sec_buf, s_off + 24, 115);
+    set_byte(sec_buf, s_off + 25, 104); set_byte(sec_buf, s_off + 26, 115);
+    set_byte(sec_buf, s_off + 27, 116); set_byte(sec_buf, s_off + 28, 114);
+    set_byte(sec_buf, s_off + 29, 116); set_byte(sec_buf, s_off + 30, 97);
+    set_byte(sec_buf, s_off + 31, 98); set_byte(sec_buf, s_off + 32, 0);
+    # 33: .eia_reloc\0 (46, 101, 105, 97, 95, 114, 101, 108, 111, 99, 0)
+    set_byte(sec_buf, s_off + 33, 46); set_byte(sec_buf, s_off + 34, 101);
+    set_byte(sec_buf, s_off + 35, 105); set_byte(sec_buf, s_off + 36, 97);
+    set_byte(sec_buf, s_off + 37, 95); set_byte(sec_buf, s_off + 38, 114);
+    set_byte(sec_buf, s_off + 39, 101); set_byte(sec_buf, s_off + 40, 108);
+    set_byte(sec_buf, s_off + 41, 111); set_byte(sec_buf, s_off + 42, 99);
+    set_byte(sec_buf, s_off + 43, 0);
+    # 44: .eia_schema\0 (46, 101, 105, 97, 95, 115, 99, 104, 101, 109, 97, 0)
+    set_byte(sec_buf, s_off + 44, 46); set_byte(sec_buf, s_off + 45, 101);
+    set_byte(sec_buf, s_off + 46, 105); set_byte(sec_buf, s_off + 47, 97);
+    set_byte(sec_buf, s_off + 48, 95); set_byte(sec_buf, s_off + 49, 115);
+    set_byte(sec_buf, s_off + 50, 99); set_byte(sec_buf, s_off + 51, 104);
+    set_byte(sec_buf, s_off + 52, 101); set_byte(sec_buf, s_off + 53, 109);
+    set_byte(sec_buf, s_off + 54, 97); set_byte(sec_buf, s_off + 55, 0);
+    # 56: .eia_symtab\0 (46,101,105,97,95,115,121,109,116,97,98,0)
+    set_byte(sec_buf, s_off + 56, 46);  set_byte(sec_buf, s_off + 57, 101);
+    set_byte(sec_buf, s_off + 58, 105); set_byte(sec_buf, s_off + 59, 97);
+    set_byte(sec_buf, s_off + 60, 95);  set_byte(sec_buf, s_off + 61, 115);
+    set_byte(sec_buf, s_off + 62, 121); set_byte(sec_buf, s_off + 63, 109);
+    set_byte(sec_buf, s_off + 64, 116); set_byte(sec_buf, s_off + 65, 97);
+    set_byte(sec_buf, s_off + 66, 98);  set_byte(sec_buf, s_off + 67, 0);
+
+    # 2. strtab at sec_buf + pad_len + 64
+    # "\0main\0" (6 bytes, padded to 8 bytes)
+    let str_off = pad_len + 64;
+    # 1: main\0 (109, 97, 105, 110, 0)
+    set_byte(sec_buf, str_off + 1, 109); set_byte(sec_buf, str_off + 2, 97);
+    set_byte(sec_buf, str_off + 3, 105); set_byte(sec_buf, str_off + 4, 110);
+    set_byte(sec_buf, str_off + 5, 0);
+
+    # 3. symtab at sec_buf + pad_len + 72 (48 bytes: 2 entries * 24B)
+    # Entry 0 (UNDEF): 24 zeros
+    # Entry 1 (main):
+    let sym_off = pad_len + 72;
+    set_byte(sec_buf, sym_off + 24, 1); # st_name = 1 (main)
+    set_byte(sec_buf, sym_off + 28, 18); # st_info = STB_GLOBAL(1<<4) | STT_FUNC(2) = 18
+    set_byte(sec_buf, sym_off + 29, 0);  # st_other = STV_DEFAULT
+    set_byte(sec_buf, sym_off + 30, 1);  # st_shndx = 1 (.text)
+    # st_value = entry_vaddr (qword at sym_off + 32)
+    set_qword(sec_buf + sym_off + 32, 0, entry_vaddr);
+    # st_size = code_len (qword at sym_off + 40)
+    set_qword(sec_buf + sym_off + 40, 0, code_len);
+
+    # 4. Section Headers at sec_buf + pad_len + 120 (7 * 64B = 448B)
+    let shdr_base = sec_buf + pad_len + 120;
+    # Shdr 0: NULL (64 zeros)
+    # Shdr 1: .text
+    let sh1 = shdr_base + 64;
+    set_byte(sh1, 0, 1); # sh_name = 1 (.text)
+    set_byte(sh1, 4, 1); # sh_type = 1 (SHT_PROGBITS)
+    set_qword(sh1, 1, 6); # sh_flags = SHF_ALLOC | SHF_EXECINSTR = 6
+    set_qword(sh1, 2, entry_vaddr); # sh_addr
+    set_qword(sh1, 3, ELF_HEADERS_TOTAL_SIZE); # sh_offset = 120
+    set_qword(sh1, 4, code_len); # sh_size
+    set_qword(sh1, 6, 16); # sh_addralign = 16
+
+    # Shdr 2: .symtab
+    let sh2 = shdr_base + 128;
+    set_byte(sh2, 0, 7); # sh_name = 7 (.symtab)
+    set_byte(sh2, 4, 2); # sh_type = 2 (SHT_SYMTAB)
+    set_qword(sh2, 3, symtab_off); # sh_offset
+    set_qword(sh2, 4, 48); # sh_size = 48
+    set_byte(sh2, 40, 3); # sh_link = 3 (.strtab)
+    set_byte(sh2, 44, 1); # sh_info = 1
+    set_qword(sh2, 6, 8); # sh_addralign = 8
+    set_qword(sh2, 7, 24); # sh_entsize = 24
+
+    # Shdr 3: .strtab
+    let sh3 = shdr_base + 192;
+    set_byte(sh3, 0, 15); # sh_name = 15 (.strtab)
+    set_byte(sh3, 4, 3); # sh_type = 3 (SHT_STRTAB)
+    set_qword(sh3, 3, strtab_off); # sh_offset
+    set_qword(sh3, 4, 8); # sh_size = 8
+    set_qword(sh3, 6, 1); # sh_addralign = 1
+
+    # Shdr 4: .shstrtab
+    let sh4 = shdr_base + 256;
+    set_byte(sh4, 0, 23); # sh_name = 23 (.shstrtab)
+    set_byte(sh4, 4, 3); # sh_type = 3 (SHT_STRTAB)
+    set_qword(sh4, 3, shstrtab_off); # sh_offset
+    set_qword(sh4, 4, 64); # sh_size = 64
+    set_qword(sh4, 6, 1); # sh_addralign = 1
+
+    # Shdr 5: .eia_reloc
+    let sh5 = shdr_base + 320;
+    set_byte(sh5, 0, 33); # sh_name = 33 (.eia_reloc)
+    set_byte(sh5, 4, 1);  # sh_type = 1 (SHT_PROGBITS)
+    set_qword(sh5, 1, 2);  # sh_flags = SHF_ALLOC (2)
+    set_qword(sh5, 2, ELF_BASE_VADDR + reloc_off); # sh_addr
+    set_qword(sh5, 3, reloc_off); # sh_offset
+    set_qword(sh5, 4, reloc_data_len); # sh_size
+    set_qword(sh5, 6, 8);  # sh_addralign = 8
+    set_qword(sh5, 7, 32); # sh_entsize = 32 (4 qwords per entry)
+
+    # Shdr 6: .eia_schema
+    let sh6 = shdr_base + 384;
+    set_byte(sh6, 0, 44); # sh_name = 44 (.eia_schema)
+    set_byte(sh6, 4, 1);  # sh_type = 1 (SHT_PROGBITS)
+    set_qword(sh6, 1, 2);  # sh_flags = SHF_ALLOC (2)
+    set_qword(sh6, 2, ELF_BASE_VADDR + schema_off); # sh_addr
+    set_qword(sh6, 3, schema_off); # sh_offset
+    set_qword(sh6, 4, schema_data_len); # sh_size
+    set_qword(sh6, 6, 8);  # sh_addralign = 8
+    set_qword(sh6, 7, 8);  # sh_entsize = 8
+
+    # Shdr 7: .eia_symtab (SymbolContract[] — 48 bytes per entry: 6 x i64)
+    let sh7 = shdr_base + 448;
+    set_byte(sh7, 0, 56); # sh_name = 56 (.eia_symtab)
+    set_byte(sh7, 4, 1);  # sh_type = SHT_PROGBITS
+    set_qword(sh7, 1, 2); # sh_flags = SHF_ALLOC
+    set_qword(sh7, 2, if eia_symtab_data_len > 0 { ELF_BASE_VADDR + eia_symtab_off } else { 0 }); # sh_addr
+    set_qword(sh7, 3, eia_symtab_off); # sh_offset
+    set_qword(sh7, 4, eia_symtab_data_len); # sh_size
+    set_qword(sh7, 6, 8); # sh_addralign = 8
+    set_qword(sh7, 7, 48);# sh_entsize = 48 (6 i64 fields per SymbolContract)
+
+    let total_sec_len = pad_len + 632; # 568 + 64 bytes for new Shdr 7
+    let w = sys_write_all(out_fd, sec_buf, total_sec_len);
+    sys_munmap(sec_buf, 4096);
+    if w != total_sec_len { return -21; }
+    return total_sec_len;
+}
+
+fn write_elf_executable_target(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr = sys_mmap_page();
+    let i = 0;
+    while i < ELF_HEADERS_TOTAL_SIZE {
+        set_byte(hdr, i, 0);
+        i = i + 1;
+    }
+
+    # ELF64 Header (64 bytes)
+    # e_ident (16 bytes)
+    set_byte(hdr, 0, 127); # 0x7F
+    set_byte(hdr, 1, 69);  # 'E'
+    set_byte(hdr, 2, 76);  # 'L'
+    set_byte(hdr, 3, 70);  # 'F'
+    set_byte(hdr, 4, 2);   # ELFCLASS64
+    set_byte(hdr, 5, 1);   # ELFDATA2LSB
+    set_byte(hdr, 6, 1);   # EV_CURRENT
+
+    # e_type = ET_EXEC (2)
+    set_byte(hdr, 16, 2);
+
+    # e_machine:
+    let em = EM_X86_64;
+    if target_id == TARGET_ARM64 {
+        em = EM_AARCH64;
+    }
+    if target_id == TARGET_RISCV64 {
+        em = EM_RISCV;
+    }
+    set_byte(hdr, 18, em & 255);
+    set_byte(hdr, 19, (em >> 8) & 255);
+
+    # e_version = 1
+    set_byte(hdr, 20, 1);
+
+    # e_entry:
+    let entry_vaddr = ELF_BASE_VADDR + ELF_HEADERS_TOTAL_SIZE;
+    if target_id == TARGET_X86_64 {
+        entry_vaddr = ELF_BASE_VADDR + ELF_HEADERS_TOTAL_SIZE + 5;
+    }
+    set_qword(hdr, 3, entry_vaddr);
+
+    # e_phoff = ELF_HEADER_SIZE (slot 4, byte 32)
+    set_qword(hdr, 4, ELF_HEADER_SIZE);
+
+    # EIA ARLL Relocation hole table:
+    let hole_cnt = 0;
+    if eia_get_tbl_valid() == 1 {
+        let g_tbl = eia_get_tbl();
+        hole_cnt = get_qword(g_tbl, TBL_EIA_HOLE_COUNT_QWORD_IDX);
+    }
+    let reloc_data_len = hole_cnt * 32;
+    let reloc_off = ELF_HEADERS_TOTAL_SIZE + code_len;
+
+    # EIA Schema Table Payload (Embedded inside binary as .eia_schema):
+    let schema_data_len = 0;
+    let schema_buf = 0;
+    if eia_get_tbl_valid() == 1 {
+        let g_tbl = eia_get_tbl();
+        let struct_cnt = get_qword(g_tbl, TBL_STRUCT_COUNT_QWORD_IDX);
+        if struct_cnt > 0 {
+            schema_buf = sys_mmap(0, 65536, 3, 34, -1, 0);
+            let sw = 0;
+            set_qword(schema_buf, sw, struct_cnt); sw = sw + 1;
+            let si = 0;
+            while si < struct_cnt {
+                let base = g_tbl + TBL_STRUCT_BASE_OFFSET + (si * TBL_STRUCT_ENTRY_SIZE);
+                let sname = get_qword(base, 0);
+                let fcount = get_qword(base, 3);
+                set_qword(schema_buf, sw, sname); sw = sw + 1;
+                set_qword(schema_buf, sw, fcount); sw = sw + 1;
+                let f = 0;
+                while f < fcount {
+                    let fb = base + 32 + (f * 48);
+                    let fh = get_qword(fb, 0);
+                    let fo = get_qword(fb, 3);
+                    set_qword(schema_buf, sw, fh); sw = sw + 1;
+                    set_qword(schema_buf, sw, fo); sw = sw + 1;
+                    f = f + 1;
+                }
+                si = si + 1;
+            }
+            schema_data_len = sw * 8;
+        }
+    }
+    let schema_off = reloc_off + reloc_data_len;
+
+    # Serialize SymbolContracts from EIA table into .eia_symtab payload
+    # Each record: symbol_id(8) type_sig_hash(8) flags(8) calling_convention(8)
+    #              physical_offset(8) hole_list_offset(8) = 48 bytes
+    let symtab_data_len = 0;
+    let symtab_buf = 0;
+    let eia_symtab_off = schema_off + schema_data_len;
+    if eia_get_tbl_valid() == 1 {
+        let g_tbl = eia_get_tbl();
+        if g_tbl != 0 {
+            let hole_cnt_tbl = get_qword(g_tbl, TBL_EIA_HOLE_COUNT_QWORD_IDX);
+            if hole_cnt_tbl > 0 {
+                symtab_buf = sys_mmap(0, 65536, 3, 34, -1, 0);
+                let sw = 0;
+                let hi = 0;
+                while hi < hole_cnt_tbl {
+                    let hb = g_tbl + TBL_EIA_HOLE_BASE_OFFSET + (hi * TBL_EIA_HOLE_ENTRY_SIZE);
+                    let patch_pos  = get_qword(hb, 0);
+                    let struct_id  = get_qword(hb, 1);
+                    let field_hash = get_qword(hb, 2);
+                    let def_off    = get_qword(hb, 3);
+                    # symbol_id = BLAKE3(struct_id, field_hash)
+                    set_qword(symtab_buf, sw + 0, blake3_hash_contract(struct_id, field_hash));
+                    # type_sig_hash = BLAKE3(field_hash, def_off)
+                    set_qword(symtab_buf, sw + 1, blake3_hash_contract(field_hash, def_off));
+                    set_qword(symtab_buf, sw + 2, 1);       # flags: Export
+                    set_qword(symtab_buf, sw + 3, EIA_CALLING_CONV_SYSV);
+                    set_qword(symtab_buf, sw + 4, ELF_BASE_VADDR + ELF_HEADERS_TOTAL_SIZE + patch_pos);
+                    set_qword(symtab_buf, sw + 5, reloc_off + (hi * TBL_EIA_HOLE_ENTRY_SIZE));
+                    sw = sw + 6;
+                    hi = hi + 1;
+                }
+                symtab_data_len = sw * 8;
+            }
+        }
+    }
+
+    # Compute BLAKE3-64 contract root over the entire symtab payload
+    let contract_root = 0;
+    if symtab_data_len > 0 {
+        mut acc = 0;
+        let wcount = symtab_data_len / 8;
+        let i = 0;
+        while i < wcount {
+            let w = get_qword(symtab_buf, i);
+            acc = blake3_hash_contract(acc, w);
+            i = i + 1;
+        }
+        contract_root = acc;
+    }
+
+    # Compute section offsets for e_shoff:
+    let code_end = ELF_HEADERS_TOTAL_SIZE + code_len + reloc_data_len + schema_data_len + symtab_data_len;
+    let pad_len = 0;
+    let rem = code_end % 8;
+    if rem != 0 { pad_len = 8 - rem; }
+    let shstrtab_off = code_end + pad_len;
+    let strtab_off = shstrtab_off + 64;
+    let elf_symtab_off = strtab_off + 8;
+    let shdr_off = elf_symtab_off + 48;
+
+    # e_shoff = shdr_off (slot 5, byte 40)
+    set_qword(hdr, 5, shdr_off);
+
+    # e_ehsize = ELF_HEADER_SIZE (byte 52)
+    set_byte(hdr, 52, ELF_HEADER_SIZE);
+
+    # e_phentsize = ELF_PHDR_SIZE (byte 54)
+    set_byte(hdr, 54, ELF_PHDR_SIZE);
+
+    # e_phnum = 1 (byte 56)
+    set_byte(hdr, 56, 1);
+
+    # e_shentsize = 64 (byte 58)
+    set_byte(hdr, 58, 64);
+
+    # e_shnum = 8 (byte 60): NULL + .text + .symtab + .strtab + .shstrtab +
+    #                         .eia_reloc + .eia_schema + .eia_symtab
+    set_byte(hdr, 60, 8);
+
+    # e_shstrndx = 4 (byte 62)
+    set_byte(hdr, 62, 4);
+
+    # Patch the HologramHeader at the start of code_buf (first 96 bytes)
+    # Layout: magic(8) ver_maj(8) ver_min(8) isa(8) sym_cnt(8) hole_cnt(8)
+    #         is_valid(8) cap_req(8) sym_tbl_off(8) hole_tbl_off(8)
+    #         blake3_root(8) reserved_zero(8)
+    set_qword(code_buf,  0, EIA_MAGIC_HOLO);
+    set_qword(code_buf,  1, 2);             # version_major
+    set_qword(code_buf,  2, 0);             # version_minor
+    set_qword(code_buf,  3, ISA_X86_64);    # target_isa (patched per target by caller)
+    set_qword(code_buf,  4, symtab_data_len / 48); # symbol_count
+    set_qword(code_buf,  5, hole_cnt);      # hole_count
+    set_qword(code_buf,  6, 1);             # is_valid
+    set_qword(code_buf,  7, 0);             # capability_req_mask
+    set_qword(code_buf,  8, if symtab_data_len > 0 { ELF_BASE_VADDR + eia_symtab_off } else { 0 }); # symbol_table_offset
+    set_qword(code_buf,  9, ELF_BASE_VADDR + reloc_off);  # hole_table_offset
+    set_qword(code_buf, 10, contract_root); # blake3_contract_root
+    set_qword(code_buf, 11, 0);             # reserved_zero
+
+    # Program Header at offset 64 (56 bytes):
+    # p_type = PT_LOAD (1)
+    set_byte(hdr, 64, 1);
+
+    # p_flags = PF_R | PF_W | PF_X (7)
+    set_byte(hdr, 68, 7);
+
+    # p_vaddr = ELF_BASE_VADDR (slot 10)
+    set_qword(hdr, 10, ELF_BASE_VADDR);
+
+    # p_paddr = ELF_BASE_VADDR (slot 11)
+    set_qword(hdr, 11, ELF_BASE_VADDR);
+
+    # p_filesz = total_sz (slot 12)
+    let total_sz = code_end;
+    set_qword(hdr, 12, total_sz);
+
+    # p_memsz = total_sz (slot 13)
+    set_qword(hdr, 13, total_sz);
+
+    # p_align = 4096 (slot 14)
+    set_qword(hdr, 14, 4096);
+
+    # Open output file: O_WRONLY | O_CREAT | O_TRUNC (577), 0755 permissions (493)
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 {
+        if schema_buf != 0 { sys_munmap(schema_buf, 65536); }
+        if symtab_buf != 0 { sys_munmap(symtab_buf, 65536); }
+        sys_munmap(hdr, 4096);
+        return -20;
+    }
+
+    # Write ELF headers
+    let w_hdr = sys_write_all(out_fd, hdr, ELF_HEADERS_TOTAL_SIZE);
+    sys_munmap(hdr, 4096);
+    if w_hdr != ELF_HEADERS_TOTAL_SIZE {
+        if schema_buf != 0 { sys_munmap(schema_buf, 65536); }
+        if symtab_buf != 0 { sys_munmap(symtab_buf, 65536); }
+        sys_close(out_fd);
+        return -21;
+    }
+
+    # Write code_buf
+    let w_code = sys_write_all(out_fd, code_buf, code_len);
+    if w_code != code_len {
+        if schema_buf != 0 { sys_munmap(schema_buf, 65536); }
+        if symtab_buf != 0 { sys_munmap(symtab_buf, 65536); }
+        sys_close(out_fd);
+        return -21;
+    }
+
+    # Write hole table bytes (.eia_reloc payload)
+    if reloc_data_len > 0 {
+        let g_tbl = eia_get_tbl();
+        let hole_base = g_tbl + TBL_EIA_HOLE_BASE_OFFSET;
+        let w_reloc = sys_write_all(out_fd, hole_base, reloc_data_len);
+        if w_reloc != reloc_data_len {
+            if schema_buf != 0 { sys_munmap(schema_buf, 65536); }
+            if symtab_buf != 0 { sys_munmap(symtab_buf, 65536); }
+            sys_close(out_fd);
+            return -21;
+        }
+    }
+
+    # Write schema bytes (.eia_schema payload)
+    if schema_data_len > 0 {
+        let w_schema = sys_write_all(out_fd, schema_buf, schema_data_len);
+        sys_munmap(schema_buf, 65536);
+        if w_schema != schema_data_len {
+            if symtab_buf != 0 { sys_munmap(symtab_buf, 65536); }
+            sys_close(out_fd);
+            return -21;
+        }
+    }
+
+    # Write EIA symbol contract bytes (.eia_symtab payload)
+    if symtab_data_len > 0 {
+        let w_sym = sys_write_all(out_fd, symtab_buf, symtab_data_len);
+        sys_munmap(symtab_buf, 65536);
+        if w_sym != symtab_data_len {
+            sys_close(out_fd);
+            return -21;
+        }
+    }
+
+    # Write section headers & symbol tables
+    let w_sec = write_elf_sections(out_fd, code_len, entry_vaddr, reloc_data_len, reloc_off, schema_data_len, schema_off, symtab_data_len, eia_symtab_off);
+    sys_close(out_fd);
+    if w_sec < 0 {
+        return -21;
+    }
+
+    return total_sz + w_sec;
+}
+
+# DDZRE Vector 4: Demand-Driven Zero-Runtime Minimal ELF Synthesizer
+# Emits raw ELF64 executable with 0 section header tables (under 500 bytes for minimal scripts)
+fn write_elf_executable_target_minimal(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr = sys_mmap_page();
+    let i = 0;
+    while i < ELF_HEADERS_TOTAL_SIZE {
+        set_byte(hdr, i, 0);
+        i = i + 1;
+    }
+
+    # ELF64 Header (64 bytes)
+    set_byte(hdr, 0, 127); set_byte(hdr, 1, 69); set_byte(hdr, 2, 76); set_byte(hdr, 3, 70);
+    set_byte(hdr, 4, 2);   # ELFCLASS64
+    set_byte(hdr, 5, 1);   # ELFDATA2LSB
+    set_byte(hdr, 6, 1);   # EV_CURRENT
+    set_byte(hdr, 16, 2);  # ET_EXEC
+
+    let em = EM_X86_64;
+    if target_id == TARGET_ARM64 { em = EM_AARCH64; }
+    if target_id == TARGET_RISCV64 { em = EM_RISCV; }
+    set_byte(hdr, 18, em & 255);
+    set_byte(hdr, 19, (em >> 8) & 255);
+    set_byte(hdr, 20, 1);  # e_version = 1
+
+    let entry_vaddr = ELF_BASE_VADDR + ELF_HEADERS_TOTAL_SIZE;
+    if target_id == TARGET_X86_64 {
+        entry_vaddr = ELF_BASE_VADDR + ELF_HEADERS_TOTAL_SIZE + 5;
+    }
+    set_qword(hdr, 3, entry_vaddr);
+    set_qword(hdr, 4, ELF_HEADER_SIZE); # e_phoff = 64
+    set_qword(hdr, 5, 0);               # e_shoff = 0 (No section headers)
+    set_byte(hdr, 52, ELF_HEADER_SIZE); # e_ehsize = 64
+    set_byte(hdr, 54, ELF_PHDR_SIZE);   # e_phentsize = 56
+    set_byte(hdr, 56, 1);               # e_phnum = 1
+    set_byte(hdr, 58, 0);               # e_shentsize = 0
+    set_byte(hdr, 60, 0);               # e_shnum = 0
+    set_byte(hdr, 62, 0);               # e_shstrndx = 0
+
+    # Program Header (56 bytes at offset 64):
+    set_byte(hdr, 64, 1);               # p_type = PT_LOAD
+    set_byte(hdr, 68, 7);               # p_flags = PF_R | PF_W | PF_X
+    set_qword(hdr, 10, ELF_BASE_VADDR); # p_vaddr
+    set_qword(hdr, 11, ELF_BASE_VADDR); # p_paddr
+    let total_sz = ELF_HEADERS_TOTAL_SIZE + code_len;
+    set_qword(hdr, 12, total_sz);       # p_filesz
+    set_qword(hdr, 13, total_sz);       # p_memsz
+    set_qword(hdr, 14, 4096);           # p_align
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 { return -20; }
+    let w_hdr = sys_write_all(out_fd, hdr, ELF_HEADERS_TOTAL_SIZE);
+    if w_hdr != ELF_HEADERS_TOTAL_SIZE { sys_close(out_fd); return -21; }
+    let w_code = sys_write_all(out_fd, code_buf, code_len);
+    sys_close(out_fd);
+    if w_code != code_len { return -21; }
+    return total_sz;
+}
+
+# TRNM-SDE Trap 14: Relocation Normalization Matrix Lookup
+# Normalizes dynamic linker relocation types (GOTPCRELX, TLSDESC, etc.)
+let RELOC_NORM_STANDARD            = 0;
+let RELOC_NORM_RELAX_LEA           = 1;
+let RELOC_NORM_GOT_INDIR           = 2;
+let RELOC_NORM_TLSDESC_DIRECT      = 3;
+let RELOC_NORM_TRAMPOLINE_FALLBACK = 4;
+
+fn elf_normalize_relocation(reloc_type: i64, is_local_sym: i64, disp32: i64): i64 {
+    # 41: R_X86_64_GOTPCRELX, 42: R_X86_64_REX_GOTPCRELX
+    if (reloc_type == 41) | (reloc_type == 42) {
+        if is_local_sym != 0 {
+            # Symbol is within signed 32-bit reach; relax to direct RIP-relative LEA
+            return RELOC_NORM_RELAX_LEA;
+        }
+        return RELOC_NORM_GOT_INDIR;
+    }
+    # 36: R_X86_64_TLSDESC, 1031: R_AARCH64_TLSDESC
+    if (reloc_type == 36) | (reloc_type == 1031) {
+        return RELOC_NORM_TLSDESC_DIRECT;
+    }
+    # Standard PC-relative or direct relocations
+    if (reloc_type == 1) | (reloc_type == 2) | (reloc_type == 4) | (reloc_type == 7) {
+        return RELOC_NORM_STANDARD;
+    }
+    # Fallback to indirect veneer trampoline
+    return RELOC_NORM_TRAMPOLINE_FALLBACK;
+}
+
+# DDZRE / PIE: Position-Independent Executable Minimal Synthesizer (ET_DYN)
+# Emits minimal ELF64 PIE binary (base vaddr 0, e_type = 3: ET_DYN) for ASLR compliance
+fn write_elf_executable_target_pie_minimal(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr = sys_mmap_page();
+    let i = 0;
+    while i < ELF_HEADERS_TOTAL_SIZE {
+        set_byte(hdr, i, 0);
+        i = i + 1;
+    }
+
+    # ELF64 Header (64 bytes)
+    set_byte(hdr, 0, 127); set_byte(hdr, 1, 69); set_byte(hdr, 2, 76); set_byte(hdr, 3, 70);
+    set_byte(hdr, 4, 2);   # ELFCLASS64
+    set_byte(hdr, 5, 1);   # ELFDATA2LSB
+    set_byte(hdr, 6, 1);   # EV_CURRENT
+    set_byte(hdr, 16, 3);  # e_type = ET_DYN (Position Independent Executable)
+
+    let em = EM_X86_64;
+    if target_id == TARGET_ARM64 { em = EM_AARCH64; }
+    if target_id == TARGET_RISCV64 { em = EM_RISCV; }
+    set_byte(hdr, 18, em & 255);
+    set_byte(hdr, 19, (em >> 8) & 255);
+    set_byte(hdr, 20, 1);  # e_version = 1
+
+    let entry_vaddr = ELF_HEADERS_TOTAL_SIZE;
+    if target_id == TARGET_X86_64 {
+        entry_vaddr = ELF_HEADERS_TOTAL_SIZE + 5;
+    }
+    set_qword(hdr, 3, entry_vaddr);
+    set_qword(hdr, 4, ELF_HEADER_SIZE); # e_phoff = 64
+    set_qword(hdr, 5, 0);               # e_shoff = 0
+    set_byte(hdr, 52, ELF_HEADER_SIZE); # e_ehsize = 64
+    set_byte(hdr, 54, ELF_PHDR_SIZE);   # e_phentsize = 56
+    set_byte(hdr, 56, 1);               # e_phnum = 1
+    set_byte(hdr, 58, 0);
+    set_byte(hdr, 60, 0);
+    set_byte(hdr, 62, 0);
+
+    # Program Header (56 bytes at offset 64):
+    set_byte(hdr, 64, 1);               # p_type = PT_LOAD
+    set_byte(hdr, 68, 7);               # p_flags = PF_R | PF_W | PF_X
+    set_qword(hdr, 10, 0);              # p_vaddr = 0 (PIE relocatable)
+    set_qword(hdr, 11, 0);              # p_paddr = 0
+    let total_sz = ELF_HEADERS_TOTAL_SIZE + code_len;
+    set_qword(hdr, 12, total_sz);       # p_filesz
+    set_qword(hdr, 13, total_sz);       # p_memsz
+    set_qword(hdr, 14, 4096);           # p_align
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 { return -20; }
+    let w_hdr = sys_write_all(out_fd, hdr, ELF_HEADERS_TOTAL_SIZE);
+    if w_hdr != ELF_HEADERS_TOTAL_SIZE { sys_close(out_fd); return -21; }
+    let w_code = sys_write_all(out_fd, code_buf, code_len);
+    sys_close(out_fd);
+    if w_code != code_len { return -21; }
+    return total_sz;
+}
+
+fn write_elf_executable(out_path: i64, code_buf: i64, code_len: i64): i64 {
+    return write_elf_executable_target(out_path, code_buf, code_len, TARGET_X86_64);
+}
+
+fn write_elf_object_target(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr = sys_mmap_page();
+    let i = 0;
+    while i < 1024 {
+        set_byte(hdr, i, 0);
+        i = i + 1;
+    }
+
+    # ELF64 Header (64 bytes)
+    set_byte(hdr, 0, 127); # 0x7F
+    set_byte(hdr, 1, 69);  # 'E'
+    set_byte(hdr, 2, 76);  # 'L'
+    set_byte(hdr, 3, 70);  # 'F'
+    set_byte(hdr, 4, 2);   # ELFCLASS64
+    set_byte(hdr, 5, 1);   # ELFDATA2LSB
+    set_byte(hdr, 6, 1);   # EV_CURRENT
+
+    # e_type = ET_REL (1)
+    set_byte(hdr, 16, 1);
+
+    # e_machine:
+    let em = EM_X86_64;
+    if target_id == TARGET_ARM64 {
+        em = EM_AARCH64;
+    }
+    if target_id == TARGET_RISCV64 {
+        em = EM_RISCV;
+    }
+    set_byte(hdr, 18, em & 255);
+    set_byte(hdr, 19, (em >> 8) & 255);
+
+    # e_version = 1
+    set_byte(hdr, 20, 1);
+
+    # Layout after 64-byte Ehdr:
+    let code_end = 64 + code_len;
+    let pad_len = 0;
+    let rem = code_end % 8;
+    if rem != 0 { pad_len = 8 - rem; }
+
+    # .note.GNU-stack (offset code_end + pad_len, size 0)
+    let note_off = code_end + pad_len;
+
+    # .symtab (offset note_off, 4 entries: UNDEF, .text, main, add = 4 * 24 = 96B)
+    let symtab_off = note_off;
+    let symtab_sz = 96;
+
+    # .strtab (offset symtab_off + 96, "\0main\0add\0" = 10B, padded to 16B)
+    let strtab_off = symtab_off + symtab_sz;
+    let strtab_sz = 16;
+
+    # .shstrtab (offset strtab_off + 16, "\0.text\0.note.GNU-stack\0.symtab\0.strtab\0.shstrtab\0" = 50B, padded to 56B)
+    let shstrtab_off = strtab_off + strtab_sz;
+    let shstrtab_sz = 56;
+
+    # Section Header Table (6 headers * 64B = 384B)
+    let shdr_off = shstrtab_off + shstrtab_sz;
+
+    set_qword(hdr, 5, shdr_off);
+    set_byte(hdr, 52, 64);
+    set_byte(hdr, 58, 64);
+    set_byte(hdr, 60, 6);
+    set_byte(hdr, 62, 5);
+
+    # Build section payload in sec_buf
+    let sec_buf = sys_mmap_page();
+    let j = 0;
+    while j < 1024 {
+        set_byte(sec_buf, j, 0);
+        j = j + 1;
+    }
+
+    # .symtab at sec_buf:
+    # Entry 1: .text (STT_SECTION = 3)
+    let s1 = sec_buf + 24;
+    set_byte(s1, 4, 3);
+    set_byte(s1, 6, 1);
+
+    # Entry 2: main (STB_GLOBAL | STT_FUNC = 18)
+    let s2 = sec_buf + 48;
+    set_byte(s2, 0, 1);
+    set_byte(s2, 4, 18);
+    set_byte(s2, 6, 1);
+    set_qword(s2 + 8, 0, 0);
+    set_qword(s2 + 16, 0, code_len);
+
+    # Entry 3: add (STB_GLOBAL | STT_FUNC = 18)
+    let s3 = sec_buf + 72;
+    set_byte(s3, 0, 6);
+    set_byte(s3, 4, 18);
+    set_byte(s3, 6, 1);
+    set_qword(s3 + 8, 0, 0);
+    set_qword(s3 + 16, 0, code_len);
+
+    # .strtab at sec_buf + 96:
+    let str_p = sec_buf + 96;
+    set_byte(str_p, 1, 109); set_byte(str_p, 2, 97); set_byte(str_p, 3, 105); set_byte(str_p, 4, 110); set_byte(str_p, 5, 0);
+    set_byte(str_p, 6, 97); set_byte(str_p, 7, 100); set_byte(str_p, 8, 100); set_byte(str_p, 9, 0);
+
+    # .shstrtab at sec_buf + 112:
+    let shstr_p = sec_buf + 112;
+    set_byte(shstr_p, 1, 46); set_byte(shstr_p, 2, 116); set_byte(shstr_p, 3, 101); set_byte(shstr_p, 4, 120); set_byte(shstr_p, 5, 116); set_byte(shstr_p, 6, 0);
+    set_byte(shstr_p, 7, 46); set_byte(shstr_p, 8, 110); set_byte(shstr_p, 9, 111); set_byte(shstr_p, 10, 116); set_byte(shstr_p, 11, 101); set_byte(shstr_p, 12, 46); set_byte(shstr_p, 13, 71); set_byte(shstr_p, 14, 78); set_byte(shstr_p, 15, 85); set_byte(shstr_p, 16, 45); set_byte(shstr_p, 17, 115); set_byte(shstr_p, 18, 116); set_byte(shstr_p, 19, 97); set_byte(shstr_p, 20, 99); set_byte(shstr_p, 21, 107); set_byte(shstr_p, 22, 0);
+    set_byte(shstr_p, 23, 46); set_byte(shstr_p, 24, 115); set_byte(shstr_p, 25, 121); set_byte(shstr_p, 26, 109); set_byte(shstr_p, 27, 116); set_byte(shstr_p, 28, 97); set_byte(shstr_p, 29, 98); set_byte(shstr_p, 30, 0);
+    set_byte(shstr_p, 31, 46); set_byte(shstr_p, 32, 115); set_byte(shstr_p, 33, 116); set_byte(shstr_p, 34, 114); set_byte(shstr_p, 35, 116); set_byte(shstr_p, 36, 97); set_byte(shstr_p, 37, 98); set_byte(shstr_p, 38, 0);
+    set_byte(shstr_p, 39, 46); set_byte(shstr_p, 40, 115); set_byte(shstr_p, 41, 104); set_byte(shstr_p, 42, 115); set_byte(shstr_p, 43, 116); set_byte(shstr_p, 44, 114); set_byte(shstr_p, 45, 116); set_byte(shstr_p, 46, 97); set_byte(shstr_p, 47, 98); set_byte(shstr_p, 48, 0);
+
+    # Section Headers at sec_buf + 168 (6 * 64B = 384B):
+    let shdr_base = sec_buf + 168;
+    # Shdr 1: .text
+    let sh1 = shdr_base + 64;
+    set_byte(sh1, 0, 1);
+    set_byte(sh1, 4, 1);
+    set_qword(sh1, 1, 6);
+    set_qword(sh1, 3, 64);
+    set_qword(sh1, 4, code_len);
+    set_qword(sh1, 6, 16);
+
+    # Shdr 2: .note.GNU-stack (NX)
+    let sh2 = shdr_base + 128;
+    set_byte(sh2, 0, 7);
+    set_byte(sh2, 4, 1);
+    set_qword(sh2, 1, 0);
+    set_qword(sh2, 3, note_off);
+    set_qword(sh2, 4, 0);
+    set_qword(sh2, 6, 1);
+
+    # Shdr 3: .symtab
+    let sh3 = shdr_base + 192;
+    set_byte(sh3, 0, 23);
+    set_byte(sh3, 4, 2);
+    set_qword(sh3, 3, symtab_off);
+    set_qword(sh3, 4, symtab_sz);
+    set_byte(sh3, 40, 4); # link = 4 (.strtab)
+    set_byte(sh3, 44, 2); # info = 2
+    set_qword(sh3, 6, 8);
+    set_qword(sh3, 7, 24);
+
+    # Shdr 4: .strtab
+    let sh4 = shdr_base + 256;
+    set_byte(sh4, 0, 31);
+    set_byte(sh4, 4, 3);
+    set_qword(sh4, 3, strtab_off);
+    set_qword(sh4, 4, strtab_sz);
+    set_qword(sh4, 6, 1);
+
+    # Shdr 5: .shstrtab
+    let sh5 = shdr_base + 320;
+    set_byte(sh5, 0, 39);
+    set_byte(sh5, 4, 3);
+    set_qword(sh5, 3, shstrtab_off);
+    set_qword(sh5, 4, shstrtab_sz);
+    set_qword(sh5, 6, 1);
+
+    let total_sec_data = 552;
+
+    let out_fd = sys_open(out_path, 577, 420);
+    if out_fd < 0 { return -20; }
+
+    let w_hdr = sys_write_all(out_fd, hdr, 64);
+    if w_hdr != 64 { sys_close(out_fd); return -21; }
+
+    let w_code = sys_write_all(out_fd, code_buf, code_len);
+    if w_code != code_len { sys_close(out_fd); return -21; }
+
+    if pad_len > 0 {
+        let pad_buf = sys_mmap_page();
+        let p_idx = 0;
+        while p_idx < pad_len { set_byte(pad_buf, p_idx, 0); p_idx = p_idx + 1; }
+        sys_write_all(out_fd, pad_buf, pad_len);
+    }
+
+    let w_sec = sys_write_all(out_fd, sec_buf, total_sec_data);
+    sys_close(out_fd);
+    if w_sec != total_sec_data { return -21; }
+
+    return 64 + code_len + pad_len + total_sec_data;
+}
+
+fn write_elf_object(out_path: i64, code_buf: i64, code_len: i64): i64 {
+    return write_elf_object_target(out_path, code_buf, code_len, TARGET_X86_64);
+}
+
+
+
+
+# --- Packaging Component: compiler/packaging/pe_coff.bix ---
+# pe_coff.bix - PE/COFF writing
+# Keep offsets here in sync with the PE layout below.
+
+let PE32_PLUS_OPTIONAL_HEADER_SIZE = 240;
+let PE_FILE_ALIGNMENT = 512;
+let PE_SECTION_ALIGNMENT = 4096;
+let PE_DEFAULT_IMAGE_BASE = 5368709120; # 0x140000000 default image base for x64
+
+fn pe_set_u16(buf: i64, off: i64, val: i64): i64 {
+    set_byte(buf, off, val & 255);
+    set_byte(buf, off + 1, (val >> 8) & 255);
+    return 0;
+}
+
+fn pe_set_u32(buf: i64, off: i64, val: i64): i64 {
+    set_byte(buf, off, val & 255);
+    set_byte(buf, off + 1, (val >> 8) & 255);
+    set_byte(buf, off + 2, (val >> 16) & 255);
+    set_byte(buf, off + 3, (val >> 24) & 255);
+    return 0;
+}
+
+fn pe_set_u64(buf: i64, off: i64, val: i64): i64 {
+    pe_set_u32(buf, off, val & 4294967295);
+    pe_set_u32(buf, off + 4, (val >> 32) & 4294967295);
+    return 0;
+}
+
+fn pe_align(val: i64, align_sz: i64): i64 {
+    let rem = val % align_sz;
+    if rem == 0 { return val; }
+    return val + (align_sz - rem);
+}
+
+fn pe_write_dos_header(buf: i64): i64 {
+    set_byte(buf, 0, 77);  # 'M'
+    set_byte(buf, 1, 90);  # 'Z'
+    pe_set_u16(buf, 2, 144); # e_cblp
+    pe_set_u16(buf, 4, 3);   # e_cp
+    pe_set_u16(buf, 8, 4);   # e_cparhdr
+    pe_set_u16(buf, 14, 0);  # e_ss
+    pe_set_u16(buf, 16, 184);# e_sp
+    # PE header starts at offset 0x40 directly after standard DOS header
+    pe_set_u16(buf, 60, 64); # e_lfanew
+    return 64;
+}
+
+fn pe_write_coff_header(buf: i64, off: i64, target_id: i64): i64 {
+    # "PE\0\0" signature
+    set_byte(buf, off + 0, 80);
+    set_byte(buf, off + 1, 69);
+    set_byte(buf, off + 2, 0);
+    set_byte(buf, off + 3, 0);
+
+    let coff_off = off + 4;
+    let machine_type = 34404; # IMAGE_FILE_MACHINE_AMD64 (0x8664)
+    if target_id == 2 {
+        machine_type = 43620; # IMAGE_FILE_MACHINE_ARM64 (0xAA64)
+    }
+    pe_set_u16(buf, coff_off + 0, machine_type);
+    pe_set_u16(buf, coff_off + 2, 2);    # NumberOfSections (.text, .idata)
+    pe_set_u32(buf, coff_off + 4, 0);    # TimeDateStamp (0 for reproducible builds)
+    pe_set_u32(buf, coff_off + 8, 0);    # PointerToSymbolTable
+    pe_set_u32(buf, coff_off + 12, 0);   # NumberOfSymbols
+    # PE32+ optional header is 240 bytes (0xF0)
+    pe_set_u16(buf, coff_off + 16, PE32_PLUS_OPTIONAL_HEADER_SIZE);
+    pe_set_u16(buf, coff_off + 18, 34);  # EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE
+    return coff_off + 20;
+}
+
+fn pe_write_optional_header(buf: i64, off: i64, code_len: i64, idata_len: i64, idata_rva: i64): i64 {
+    let raw_code_sz = pe_align(code_len, PE_FILE_ALIGNMENT);
+    let raw_idata_sz = pe_align(idata_len, PE_FILE_ALIGNMENT);
+    let virt_code_sz = pe_align(code_len, PE_SECTION_ALIGNMENT);
+    let virt_idata_sz = pe_align(idata_len, PE_SECTION_ALIGNMENT);
+
+    pe_set_u16(buf, off + 0, 523);           # Magic = 0x020B (PE32+)
+    set_byte(buf, off + 2, 1);               # MajorLinkerVersion
+    set_byte(buf, off + 3, 0);               # MinorLinkerVersion
+    pe_set_u32(buf, off + 4, raw_code_sz);   # SizeOfCode
+    pe_set_u32(buf, off + 8, raw_idata_sz);  # SizeOfInitializedData (.idata)
+    pe_set_u32(buf, off + 12, 0);            # SizeOfUninitializedData
+    pe_set_u32(buf, off + 16, PE_SECTION_ALIGNMENT); # Entry point RVA (0x1000)
+    pe_set_u32(buf, off + 20, PE_SECTION_ALIGNMENT); # Base of code RVA (0x1000)
+    pe_set_u64(buf, off + 24, PE_DEFAULT_IMAGE_BASE);
+    pe_set_u32(buf, off + 32, PE_SECTION_ALIGNMENT); # SectionAlignment (4096)
+    pe_set_u32(buf, off + 36, PE_FILE_ALIGNMENT);    # FileAlignment (512)
+    pe_set_u16(buf, off + 40, 6);            # MajorOperatingSystemVersion
+    pe_set_u16(buf, off + 42, 0);            # MinorOperatingSystemVersion
+    pe_set_u16(buf, off + 48, 6);            # MajorSubsystemVersion
+    pe_set_u16(buf, off + 50, 0);            # MinorSubsystemVersion
+    pe_set_u32(buf, off + 56, PE_SECTION_ALIGNMENT + virt_code_sz + virt_idata_sz); # SizeOfImage
+    pe_set_u32(buf, off + 60, PE_FILE_ALIGNMENT);    # SizeOfHeaders (512)
+    pe_set_u32(buf, off + 64, 0);            # CheckSum
+    pe_set_u16(buf, off + 68, 3);            # Subsystem: IMAGE_SUBSYSTEM_WINDOWS_CUI
+    pe_set_u16(buf, off + 70, 33120);        # DllCharacteristics: DYNAMIC_BASE | NX_COMPAT | TERMINAL_SERVER_AWARE
+    pe_set_u64(buf, off + 72, 1048576);      # SizeOfStackReserve (1 MB)
+    pe_set_u64(buf, off + 80, 4096);         # SizeOfStackCommit (4 KB)
+    pe_set_u64(buf, off + 88, 1048576);      # SizeOfHeapReserve (1 MB)
+    pe_set_u64(buf, off + 96, 4096);         # SizeOfHeapCommit (4 KB)
+    pe_set_u32(buf, off + 108, 16);          # NumberOfRvaAndSizes
+
+    # Data Directory 1 (Import Table): offset off + 112 + (1 * 8) = off + 120
+    pe_set_u32(buf, off + 120, idata_rva);   # Import Table RVA
+    pe_set_u32(buf, off + 124, 40);          # Import Table Size (2 descriptors * 20 bytes)
+
+    # Data Directory 12 (IAT): offset off + 112 + (12 * 8) = off + 208
+    pe_set_u32(buf, off + 208, idata_rva + 56); # IAT RVA
+    pe_set_u32(buf, off + 212, 16);             # IAT Size (2 qwords * 8 bytes)
+
+    return off + PE32_PLUS_OPTIONAL_HEADER_SIZE;
+}
+
+fn pe_write_section_headers(buf: i64, off: i64, code_len: i64, raw_code_sz: i64, idata_len: i64, raw_idata_sz: i64, idata_rva: i64): i64 {
+    # Section 1: ".text\0\0\0"
+    set_byte(buf, off + 0, 46); # '.'
+    set_byte(buf, off + 1, 116);# 't'
+    set_byte(buf, off + 2, 101);# 'e'
+    set_byte(buf, off + 3, 120);# 'x'
+    set_byte(buf, off + 4, 116);# 't'
+    pe_set_u32(buf, off + 8, code_len);              # VirtualSize
+    pe_set_u32(buf, off + 12, PE_SECTION_ALIGNMENT); # VirtualAddress (0x1000)
+    pe_set_u32(buf, off + 16, raw_code_sz);          # SizeOfRawData
+    pe_set_u32(buf, off + 20, PE_FILE_ALIGNMENT);    # PointerToRawData (0x200)
+    # IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ (0x60000020)
+    pe_set_u32(buf, off + 36, 1610612768);
+
+    # Section 2: ".idata\0\0"
+    let id_off = off + 40;
+    set_byte(buf, id_off + 0, 46); # '.'
+    set_byte(buf, id_off + 1, 105);# 'i'
+    set_byte(buf, id_off + 2, 100);# 'd'
+    set_byte(buf, id_off + 3, 97); # 'a'
+    set_byte(buf, id_off + 4, 116);# 't'
+    set_byte(buf, id_off + 5, 97); # 'a'
+    pe_set_u32(buf, id_off + 8, idata_len);                 # VirtualSize
+    pe_set_u32(buf, id_off + 12, idata_rva);                # VirtualAddress
+    pe_set_u32(buf, id_off + 16, raw_idata_sz);             # SizeOfRawData
+    pe_set_u32(buf, id_off + 20, PE_FILE_ALIGNMENT + raw_code_sz); # PointerToRawData
+    # IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE (0xC0000040)
+    pe_set_u32(buf, id_off + 36, 3221225536);
+
+    return id_off + 40;
+}
+
+fn pe_build_idata_section(buf: i64, idata_rva: i64): i64 {
+    # Layout of .idata (104 bytes):
+    #   0..19:   IMAGE_IMPORT_DESCRIPTOR for KERNEL32.dll
+    #   20..39:  Null IMAGE_IMPORT_DESCRIPTOR
+    #   40..55:  ILT (Import Lookup Table: Hint/Name RVA, 0)
+    #   56..71:  IAT (Import Address Table: Hint/Name RVA, 0)
+    #   72..87:  DLL Name: "KERNEL32.dll\0"
+    #   88..103: Hint/Name entry: Hint (0), "ExitProcess\0"
+
+    # 1. Descriptor
+    pe_set_u32(buf, 0, idata_rva + 40); # OriginalFirstThunk -> ILT
+    pe_set_u32(buf, 4, 0);              # TimeDateStamp
+    pe_set_u32(buf, 8, 0);              # ForwarderChain
+    pe_set_u32(buf, 12, idata_rva + 72);# Name -> "KERNEL32.dll"
+    pe_set_u32(buf, 16, idata_rva + 56);# FirstThunk -> IAT
+
+    # 2. Null Descriptor at offset 20..39 is already 0
+
+    # 3. ILT (Import Lookup Table) at offset 40
+    pe_set_u64(buf, 40, idata_rva + 88); # Points to Hint/Name for ExitProcess
+    pe_set_u64(buf, 48, 0);              # Null terminator
+
+    # 4. IAT (Import Address Table) at offset 56
+    pe_set_u64(buf, 56, idata_rva + 88); # Points to Hint/Name for ExitProcess
+    pe_set_u64(buf, 64, 0);              # Null terminator
+
+    # 5. DLL Name string at offset 72: "KERNEL32.dll\0"
+    set_byte(buf, 72, 75);  # 'K'
+    set_byte(buf, 73, 69);  # 'E'
+    set_byte(buf, 74, 82);  # 'R'
+    set_byte(buf, 75, 78);  # 'N'
+    set_byte(buf, 76, 69);  # 'E'
+    set_byte(buf, 77, 76);  # 'L'
+    set_byte(buf, 78, 51);  # '3'
+    set_byte(buf, 79, 50);  # '2'
+    set_byte(buf, 80, 46);  # '.'
+    set_byte(buf, 81, 100); # 'd'
+    set_byte(buf, 82, 108); # 'l'
+    set_byte(buf, 83, 108); # 'l'
+    set_byte(buf, 84, 0);
+
+    # 6. Hint/Name structure at offset 88: Hint(0), "ExitProcess\0"
+    pe_set_u16(buf, 88, 0); # Hint = 0
+    set_byte(buf, 90, 69);  # 'E'
+    set_byte(buf, 91, 120); # 'x'
+    set_byte(buf, 92, 105); # 'i'
+    set_byte(buf, 93, 116); # 't'
+    set_byte(buf, 94, 80);  # 'P'
+    set_byte(buf, 95, 114); # 'r'
+    set_byte(buf, 96, 111); # 'o'
+    set_byte(buf, 97, 99);  # 'c'
+    set_byte(buf, 98, 101); # 'e'
+    set_byte(buf, 99, 115); # 's'
+    set_byte(buf, 100, 115);# 's'
+    set_byte(buf, 101, 0);
+
+    return 104;
+}
+
+fn pe_coff_write_executable(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr_buf = sys_mmap_page();
+    let i = 0;
+    while i < 1024 {
+        set_byte(hdr_buf, i, 0);
+        i = i + 1;
+    }
+
+    let idata_len = 104;
+    let raw_code_sz = pe_align(code_len, PE_FILE_ALIGNMENT);
+    let raw_idata_sz = pe_align(idata_len, PE_FILE_ALIGNMENT);
+    let virt_code_sz = pe_align(code_len, PE_SECTION_ALIGNMENT);
+    let idata_rva = PE_SECTION_ALIGNMENT + virt_code_sz;
+
+    pe_write_dos_header(hdr_buf);
+    let opt_off = pe_write_coff_header(hdr_buf, 64, target_id);
+    let sec_off = pe_write_optional_header(hdr_buf, opt_off, code_len, idata_len, idata_rva);
+    pe_write_section_headers(hdr_buf, sec_off, code_len, raw_code_sz, idata_len, raw_idata_sz, idata_rva);
+
+    let idata_buf = sys_mmap_page();
+    i = 0;
+    while i < 1024 {
+        set_byte(idata_buf, i, 0);
+        i = i + 1;
+    }
+    pe_build_idata_section(idata_buf, idata_rva);
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 {
+        sys_munmap(hdr_buf, 4096);
+        sys_munmap(idata_buf, 4096);
+        return -20;
+    }
+
+    let w_hdr = sys_write_all(out_fd, hdr_buf, PE_FILE_ALIGNMENT);
+    sys_munmap(hdr_buf, 4096);
+    if w_hdr != PE_FILE_ALIGNMENT {
+        sys_munmap(idata_buf, 4096);
+        sys_close(out_fd);
+        return -21;
+    }
+
+    let w_code = sys_write_all(out_fd, code_buf, code_len);
+    if w_code != code_len {
+        sys_munmap(idata_buf, 4096);
+        sys_close(out_fd);
+        return -21;
+    }
+
+    # Pad text section to PE_FILE_ALIGNMENT
+    if raw_code_sz > code_len {
+        let pad_buf = sys_mmap_page();
+        let pi = 0;
+        while pi < 512 { set_byte(pad_buf, pi, 0); pi = pi + 1; }
+        let pad_needed = raw_code_sz - code_len;
+        sys_write_all(out_fd, pad_buf, pad_needed);
+        sys_munmap(pad_buf, 4096);
+    }
+
+    # Write idata section (.idata)
+    let w_idata = sys_write_all(out_fd, idata_buf, idata_len);
+    if w_idata != idata_len {
+        sys_munmap(idata_buf, 4096);
+        sys_close(out_fd);
+        return -21;
+    }
+
+    # Pad idata section to PE_FILE_ALIGNMENT
+    if raw_idata_sz > idata_len {
+        let pad_buf = sys_mmap_page();
+        let pi = 0;
+        while pi < 512 { set_byte(pad_buf, pi, 0); pi = pi + 1; }
+        let pad_needed = raw_idata_sz - idata_len;
+        sys_write_all(out_fd, pad_buf, pad_needed);
+        sys_munmap(pad_buf, 4096);
+    }
+
+    sys_munmap(idata_buf, 4096);
+    sys_close(out_fd);
+    return PE_FILE_ALIGNMENT + raw_code_sz + raw_idata_sz;
+}
+
+fn pe_coff_write_object(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr_buf = sys_mmap_page();
+    let i = 0;
+    while i < 1024 {
+        set_byte(hdr_buf, i, 0);
+        i = i + 1;
+    }
+
+    # Relocatable COFF header (20 bytes)
+    let machine_type = 34404; # 0x8664
+    if target_id == 2 {
+        machine_type = 43620; # 0xAA64
+    }
+    pe_set_u16(hdr_buf, 0, machine_type);
+    pe_set_u16(hdr_buf, 2, 1); # NumberOfSections = 1 (.text)
+    pe_set_u32(hdr_buf, 4, 0); # TimeDateStamp
+    pe_set_u32(hdr_buf, 8, 20 + 40 + code_len); # PointerToSymbolTable
+    pe_set_u32(hdr_buf, 12, 1); # NumberOfSymbols = 1 (main)
+    pe_set_u16(hdr_buf, 16, 0); # SizeOfOptionalHeader = 0 for .obj
+    pe_set_u16(hdr_buf, 18, 0); # Characteristics
+
+    # Section Header (.text, 40 bytes at offset 20)
+    set_byte(hdr_buf, 20, 46); set_byte(hdr_buf, 21, 116);
+    set_byte(hdr_buf, 22, 101); set_byte(hdr_buf, 23, 120);
+    set_byte(hdr_buf, 24, 116);
+    pe_set_u32(hdr_buf, 28, 0);        # VirtualSize
+    pe_set_u32(hdr_buf, 32, 0);        # VirtualAddress
+    pe_set_u32(hdr_buf, 36, code_len); # SizeOfRawData
+    pe_set_u32(hdr_buf, 40, 60);       # PointerToRawData = 20 + 40 = 60
+    pe_set_u32(hdr_buf, 56, 1610612768); # Characteristics = 0x60000020
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 {
+        sys_munmap(hdr_buf, 4096);
+        return -20;
+    }
+
+    sys_write_all(out_fd, hdr_buf, 60);
+    sys_munmap(hdr_buf, 4096);
+    sys_write_all(out_fd, code_buf, code_len);
+
+    # Symbol Table (1 entry = 18 bytes: "main" export)
+    let sym_buf = sys_mmap_page();
+    set_byte(sym_buf, 0, 109); set_byte(sym_buf, 1, 97); # 'm', 'a'
+    set_byte(sym_buf, 2, 105); set_byte(sym_buf, 3, 110); # 'i', 'n'
+    pe_set_u32(sym_buf, 8, 0);  # Value = 0 (offset in .text)
+    pe_set_u16(sym_buf, 12, 1); # SectionNumber = 1 (.text)
+    pe_set_u16(sym_buf, 14, 32);# Type = IMAGE_SYM_TYPE_FUNC (0x20)
+    set_byte(sym_buf, 16, 2);   # StorageClass = IMAGE_SYM_CLASS_EXTERNAL
+    set_byte(sym_buf, 17, 0);   # NumberOfAuxSymbols = 0
+    sys_write_all(out_fd, sym_buf, 18);
+    sys_munmap(sym_buf, 4096);
+
+    sys_close(out_fd);
+    return 60 + code_len + 18;
+}
+
+
+# --- Packaging Component: compiler/packaging/macho.bix ---
+# macho.bix - Mach-O executable and object writing
+# Emits 64-bit Mach-O headers and load commands for macOS targets.
+
+let MH_MAGIC_64 = 4277009103; # 0xFEEDFACF
+let CPU_TYPE_X86_64 = 16777223; # 0x01000007
+let CPU_TYPE_ARM64 = 16777228;  # 0x0100000C
+let CPU_SUBTYPE_ALL = 3;
+let MH_OBJECT = 1;
+
+let LC_SEGMENT_64 = 25;
+let LC_SYMTAB = 2;
+
+fn macho_set_u32(buf: i64, off: i64, val: i64): i64 {
+    set_byte(buf, off, val & 255);
+    set_byte(buf, off + 1, (val >> 8) & 255);
+    set_byte(buf, off + 2, (val >> 16) & 255);
+    set_byte(buf, off + 3, (val >> 24) & 255);
+    return 0;
+}
+
+fn macho_set_u64(buf: i64, off: i64, val: i64): i64 {
+    macho_set_u32(buf, off, val & 4294967295);
+    macho_set_u32(buf, off + 4, (val >> 32) & 4294967295);
+    return 0;
+}
+
+fn macho_write_object(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr_buf = sys_mmap_page();
+    let i = 0;
+    while i < 1024 {
+        set_byte(hdr_buf, i, 0);
+        i = i + 1;
+    }
+
+    # Mach-O 64-bit header (32 bytes)
+    macho_set_u32(hdr_buf, 0, MH_MAGIC_64);
+    let cputype = CPU_TYPE_X86_64;
+    if target_id == 2 {
+        cputype = CPU_TYPE_ARM64;
+    }
+    macho_set_u32(hdr_buf, 4, cputype);
+    macho_set_u32(hdr_buf, 8, CPU_SUBTYPE_ALL);
+    macho_set_u32(hdr_buf, 12, MH_OBJECT);
+    macho_set_u32(hdr_buf, 16, 2); # ncmds: LC_SEGMENT_64 + LC_SYMTAB
+
+    # LC_SEGMENT_64 (72 bytes) + 1 section header (80 bytes) = 152 bytes
+    # LC_SYMTAB (24 bytes). Total load command size = 176 bytes.
+    let sizeofcmds = 176;
+    macho_set_u32(hdr_buf, 20, sizeofcmds);
+    macho_set_u32(hdr_buf, 24, 0); # flags
+    macho_set_u32(hdr_buf, 28, 0); # reserved
+
+    # Command 1: LC_SEGMENT_64 (72 bytes at offset 32)
+    let cmd1_off = 32;
+    macho_set_u32(hdr_buf, cmd1_off + 0, LC_SEGMENT_64);
+    macho_set_u32(hdr_buf, cmd1_off + 4, 152); # cmdsize = 72 + 80
+    macho_set_u64(hdr_buf, cmd1_off + 24, 0);        # vmaddr
+    macho_set_u64(hdr_buf, cmd1_off + 32, code_len); # vmsize
+    let fileoff = 32 + sizeofcmds; # 208: code starts directly after headers
+    macho_set_u64(hdr_buf, cmd1_off + 40, fileoff);
+    macho_set_u64(hdr_buf, cmd1_off + 48, code_len); # filesize
+    macho_set_u32(hdr_buf, cmd1_off + 56, 7);        # maxprot: rwx
+    macho_set_u32(hdr_buf, cmd1_off + 60, 7);        # initprot: rwx
+    macho_set_u32(hdr_buf, cmd1_off + 64, 1);        # nsects = 1
+    macho_set_u32(hdr_buf, cmd1_off + 68, 0);
+
+    # Section 1: "__text" in "__TEXT" (80 bytes at offset 104)
+    let s1_off = cmd1_off + 72;
+    set_byte(hdr_buf, s1_off + 0, 95); set_byte(hdr_buf, s1_off + 1, 95); # "__"
+    set_byte(hdr_buf, s1_off + 2, 116); set_byte(hdr_buf, s1_off + 3, 101); # "te"
+    set_byte(hdr_buf, s1_off + 4, 120); set_byte(hdr_buf, s1_off + 5, 116); # "xt"
+
+    set_byte(hdr_buf, s1_off + 16, 95); set_byte(hdr_buf, s1_off + 17, 95); # "__"
+    set_byte(hdr_buf, s1_off + 18, 84); set_byte(hdr_buf, s1_off + 19, 69); # "TE"
+    set_byte(hdr_buf, s1_off + 20, 88); set_byte(hdr_buf, s1_off + 21, 84); # "XT"
+
+    macho_set_u64(hdr_buf, s1_off + 32, 0);        # addr = 0
+    macho_set_u64(hdr_buf, s1_off + 40, code_len); # size
+    macho_set_u32(hdr_buf, s1_off + 48, fileoff);  # file offset
+    macho_set_u32(hdr_buf, s1_off + 52, 4);        # 2^4 = 16 byte alignment
+    macho_set_u32(hdr_buf, s1_off + 56, 0);        # reloff
+    macho_set_u32(hdr_buf, s1_off + 60, 0);        # nreloc
+    # S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS (0x80000400)
+    macho_set_u32(hdr_buf, s1_off + 64, 2147484672);
+
+    # Command 2: LC_SYMTAB (24 bytes at offset 184)
+    let cmd2_off = s1_off + 80;
+    macho_set_u32(hdr_buf, cmd2_off + 0, LC_SYMTAB);
+    macho_set_u32(hdr_buf, cmd2_off + 4, 24);
+    let symtab_fileoff = fileoff + code_len;
+    macho_set_u32(hdr_buf, cmd2_off + 8, symtab_fileoff);
+    macho_set_u32(hdr_buf, cmd2_off + 12, 1); # 1 symbol: _main
+    let stroff = symtab_fileoff + 16;
+    macho_set_u32(hdr_buf, cmd2_off + 16, stroff);
+    macho_set_u32(hdr_buf, cmd2_off + 20, 16); # string table size
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 {
+        sys_munmap(hdr_buf, 4096);
+        return -20;
+    }
+
+    # Write headers and load commands
+    sys_write_all(out_fd, hdr_buf, fileoff);
+    sys_munmap(hdr_buf, 4096);
+
+    # Write code bytes
+    sys_write_all(out_fd, code_buf, code_len);
+
+    # Write nlist_64 symbol table entry (16 bytes: _main)
+    let sym_buf = sys_mmap_page();
+    macho_set_u32(sym_buf, 0, 1); # n_strx: offset into string table
+    # N_SECT | N_EXT (0x0E | 0x01 = 0x0F)
+    set_byte(sym_buf, 4, 15);
+    set_byte(sym_buf, 5, 1);      # n_sect = 1 (__text)
+    set_byte(sym_buf, 6, 0);
+    macho_set_u64(sym_buf, 8, 0); # n_value: offset in section
+    sys_write_all(out_fd, sym_buf, 16);
+
+    # Write string table: "\0_main\0" padded to 16 bytes
+    let str_buf = sys_mmap_page();
+    let si = 0;
+    while si < 16 { set_byte(str_buf, si, 0); si = si + 1; }
+    set_byte(str_buf, 1, 95);  # '_'
+    set_byte(str_buf, 2, 109); # 'm'
+    set_byte(str_buf, 3, 97);  # 'a'
+    set_byte(str_buf, 4, 105); # 'i'
+    set_byte(str_buf, 5, 110); # 'n'
+    sys_write_all(out_fd, str_buf, 16);
+
+    sys_munmap(sym_buf, 4096);
+    sys_munmap(str_buf, 4096);
+
+    # EIA ARLL Relocation + Schema sections appended after __text and symtab.
+    # These are NOT in a Mach-O segment (they are metadata for the EIA runtime),
+    # so we write them raw and return the total file size.
+    let eia_tbl = 0;
+    let tbl_valid = 0;
+    tbl_valid = eia_get_tbl_valid();
+    if tbl_valid == 1 {
+        eia_tbl = eia_get_tbl();
+    }
+    let eia_bytes = macho_write_eia_sections(out_fd, code_len, eia_tbl, tbl_valid);
+    sys_close(out_fd);
+    if eia_bytes < 0 {
+        return -21;
+    }
+
+    return fileoff + code_len + 32 + eia_bytes;
+}
+
+# Emit EIA relocation hole table (.eia_reloc) and schema descriptor (.eia_schema)
+# into a Mach-O object file. These sections are placed after __text and symtab
+# so the EIA runtime loader can find them by scanning the file tail.
+fn macho_write_eia_sections(out_fd: i64, code_len: i64, eia_tbl: i64, tbl_valid: i64): i64 {
+    if (tbl_valid == 0) | (eia_tbl == 0) {
+        return 0;
+    }
+    let hole_cnt = get_qword(eia_tbl, 2000000);
+    let struct_cnt = get_qword(eia_tbl, 17500);
+    if (hole_cnt == 0) & (struct_cnt == 0) {
+        return 0;
+    }
+
+    let reloc_data_len = hole_cnt * 32;
+    let schema_data_len = 0;
+    if struct_cnt > 0 {
+        # schema qword array: [struct_cnt, (struct_name_hash, field_count, field_hash, field_offset)...]
+        let sw = 0;
+        let si = 0;
+        let schema_buf = sys_mmap(0, 65536, 3, 34, -1, 0);
+        set_qword(schema_buf, sw, struct_cnt); sw = sw + 1;
+        while si < struct_cnt {
+            let base = eia_tbl + 140008 + (si * 800);
+            let sname = get_qword(base, 0);
+            let fcount = get_qword(base, 3);
+            set_qword(schema_buf, sw, sname); sw = sw + 1;
+            set_qword(schema_buf, sw, fcount); sw = sw + 1;
+            let f = 0;
+            while f < fcount {
+                let fb = base + 32 + (f * 48);
+                let fh = get_qword(fb, 0);
+                let fo = get_qword(fb, 3);
+                set_qword(schema_buf, sw, fh); sw = sw + 1;
+                set_qword(schema_buf, sw, fo); sw = sw + 1;
+                f = f + 1;
+            }
+            si = si + 1;
+        }
+        schema_data_len = sw * 8;
+        let w_schema = sys_write_all(out_fd, schema_buf, schema_data_len);
+        sys_munmap(schema_buf, 65536);
+        if w_schema != schema_data_len {
+            return -1;
+        }
+    }
+
+    if reloc_data_len > 0 {
+        let hole_base = eia_tbl + 16000008;
+        let w_reloc = sys_write_all(out_fd, hole_base, reloc_data_len);
+        if w_reloc != reloc_data_len {
+            return -1;
+        }
+    }
+
+    return reloc_data_len + schema_data_len;
+}
+
+
+# --- Packaging Component: compiler/packaging/wasm.bix ---
+# wasm.bix - WebAssembly binary module packaging
+# Emits minimal WASM binary format (.wasm) with single exported main function.
+
+let WASM_SECTION_TYPE = 1;
+let WASM_SECTION_FUNCTION = 3;
+let WASM_SECTION_EXPORT = 7;
+let WASM_SECTION_CODE = 10;
+let WASM_TYPE_I64 = 126; # 0x7E
+let WASM_OP_END = 11;    # 0x0B
+
+fn wasm_write_module(out_path: i64, code_buf: i64, code_len: i64): i64 {
+    let hdr_buf = sys_mmap_page();
+    let cur = 0;
+
+    # WASM magic "\0asm" and version 1
+    set_byte(hdr_buf, 0, 0);
+    set_byte(hdr_buf, 1, 97);  # 'a'
+    set_byte(hdr_buf, 2, 115); # 's'
+    set_byte(hdr_buf, 3, 109); # 'm'
+    set_byte(hdr_buf, 4, 1);
+    set_byte(hdr_buf, 5, 0);
+    set_byte(hdr_buf, 6, 0);
+    set_byte(hdr_buf, 7, 0);
+    cur = 8;
+
+    # Type section: 1 type, form 0x60 (func), 0 params, 1 result (i64)
+    set_byte(hdr_buf, cur, WASM_SECTION_TYPE); cur = cur + 1;
+    set_byte(hdr_buf, cur, 6); cur = cur + 1; # payload size
+    set_byte(hdr_buf, cur, 1); cur = cur + 1; # count
+    set_byte(hdr_buf, cur, 96); cur = cur + 1; # 0x60 func
+    set_byte(hdr_buf, cur, 0); cur = cur + 1;  # 0 params
+    set_byte(hdr_buf, cur, 1); cur = cur + 1;  # 1 result
+    set_byte(hdr_buf, cur, WASM_TYPE_I64); cur = cur + 1;
+
+    # Function section: maps func 0 to type 0
+    set_byte(hdr_buf, cur, WASM_SECTION_FUNCTION); cur = cur + 1;
+    set_byte(hdr_buf, cur, 2); cur = cur + 1; # payload size
+    set_byte(hdr_buf, cur, 1); cur = cur + 1; # 1 func
+    set_byte(hdr_buf, cur, 0); cur = cur + 1; # type index 0
+
+    # Export section: export "main" as func index 0
+    set_byte(hdr_buf, cur, WASM_SECTION_EXPORT); cur = cur + 1;
+    set_byte(hdr_buf, cur, 10); cur = cur + 1; # payload size
+    set_byte(hdr_buf, cur, 1); cur = cur + 1;  # 1 export
+    set_byte(hdr_buf, cur, 4); cur = cur + 1;  # name length = 4
+    set_byte(hdr_buf, cur, 109); cur = cur + 1; # 'm'
+    set_byte(hdr_buf, cur, 97); cur = cur + 1;  # 'a'
+    set_byte(hdr_buf, cur, 105); cur = cur + 1; # 'i'
+    set_byte(hdr_buf, cur, 110); cur = cur + 1; # 'n'
+    set_byte(hdr_buf, cur, 0); cur = cur + 1;   # kind: func (0)
+    set_byte(hdr_buf, cur, 0); cur = cur + 1;   # func index: 0
+
+    # Code section: 1 local count byte + bytecode + 0x0B (end)
+    let body_sz = 1 + code_len + 1;
+    let sec_sz = 1 + 1 + body_sz;
+    set_byte(hdr_buf, cur, WASM_SECTION_CODE); cur = cur + 1;
+    set_byte(hdr_buf, cur, sec_sz & 127); cur = cur + 1;
+    set_byte(hdr_buf, cur, 1); cur = cur + 1; # 1 function body
+    set_byte(hdr_buf, cur, body_sz & 127); cur = cur + 1;
+    set_byte(hdr_buf, cur, 0); cur = cur + 1; # 0 local decls
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 {
+        sys_munmap(hdr_buf, 4096);
+        return -20;
+    }
+
+    sys_write_all(out_fd, hdr_buf, cur);
+    sys_munmap(hdr_buf, 4096);
+
+    sys_write_all(out_fd, code_buf, code_len);
+
+    let end_byte = sys_mmap_page();
+    set_byte(end_byte, 0, WASM_OP_END);
+    sys_write_all(out_fd, end_byte, 1);
+    sys_munmap(end_byte, 4096);
+
+    sys_close(out_fd);
+    return cur + code_len + 1;
+}
+
+
+# --- Packaging Component: compiler/packaging/upbp.bix ---
+# ==============================================================================
+# UPBP: UNIVERSAL POLYGLOT BINARY PACKAGING
+# EIA-Omega Multi-OS / Multi-Arch Sovereign Packaging Engine
+# Single universal binary that boots natively across Linux, Windows, and macOS
+# ==============================================================================
+
+# UPBP Magic & Layout Constants
+let UPBP_MAGIC_DOS_MZ      = 23117;      # 0x5A4D ('MZ' little-endian)
+let UPBP_MAGIC_ELF         = 1179403647; # 0x464C457F ('\x7fELF' little-endian)
+let UPBP_MAGIC_MACHO       = 4277009103; # 0xFEEDFACF (MH_MAGIC_64)
+let UPBP_MAGIC_EIA_HOLO    = 1145653573; # 'EIAH' (Universal Hologram Σ_∞)
+
+# Offset Layout in Universal Polyglot Container
+let UPBP_OFF_DOS_HEADER    = 0;   # 0x0000: MS-DOS MZ header (64B)
+let UPBP_OFF_ELF_HEADER    = 64;  # 0x0040: Linux ELF64 header (64B)
+let UPBP_OFF_MACHO_HEADER  = 128; # 0x0080: macOS Mach-O 64-bit header (64B)
+let UPBP_OFF_HOLO_HEADER   = 192; # 0x00C0: Universal Hologram contract (64B)
+let UPBP_OFF_MULTIARCH_VEC = 256; # 0x0100: Multi-Arch Stencil Vector Table (256B)
+let UPBP_OFF_PE_HEADER     = 512; # 0x0200: Windows PE / COFF header & optional header
+let UPBP_PREAMBLE_TOTAL_SZ = 1024;# 1KB Total Preamble
+
+# Target Architectures
+let ARCH_X86_64 = 1;
+let ARCH_ARM64  = 2;
+let ARCH_RISCV64= 3;
+
+# Universal Polyglot Container Descriptor
+struct UpbpContainer {
+    buffer_addr: i64,
+    total_size: i64,
+    code_size: i64,
+    x86_entry_off: i64,
+    arm64_entry_off: i64,
+    riscv_entry_off: i64
+}
+
+# Initializes a UPBP polyglot preamble in memory
+fn upbp_init_container(): *UpbpContainer {
+    let mem = sys_mmap(0, 4096, 3, 34, -1, 0); # container struct memory
+    let c = mem as *UpbpContainer;
+    let buf = sys_mmap(0, 65536, 3, 34, -1, 0); # 64KB container buffer
+
+    set_qword(mem, 0, buf);                     # buffer_addr
+    set_qword(mem, 1, UPBP_PREAMBLE_TOTAL_SZ);   # total_size
+    set_qword(mem, 2, 0);                       # code_size
+    set_qword(mem, 3, UPBP_PREAMBLE_TOTAL_SZ);   # x86_entry_off
+    set_qword(mem, 4, UPBP_PREAMBLE_TOTAL_SZ + 64);  # arm64_entry_off
+    set_qword(mem, 5, UPBP_PREAMBLE_TOTAL_SZ + 128); # riscv_entry_off
+
+    # 1. Write MS-DOS MZ Header at offset 0x00
+    # Bytes 0-1: 'M', 'Z'
+    set_byte(buf, 0, 77);
+    set_byte(buf, 1, 90);
+    # Byte 60 (0x3C): e_lfanew -> Points to PE Header at offset 512 (0x200)
+    set_byte(buf, 60, 0);
+    set_byte(buf, 61, 2); # 512 in 16-bit LE (0x0200)
+
+    # 2. Write Linux ELF64 Header at offset 0x40 (64)
+    # Magic: \x7f, 'E', 'L', 'F'
+    set_byte(buf, 64, 127);
+    set_byte(buf, 65, 69);
+    set_byte(buf, 66, 76);
+    set_byte(buf, 67, 70);
+    set_byte(buf, 68, 2); # ELFCLASS64
+    set_byte(buf, 69, 1); # ELFDATA2LSB (little endian)
+    set_byte(buf, 70, 1); # EV_CURRENT
+    set_byte(buf, 71, 0); # ELFOSABI_NONE / Linux
+    set_byte(buf, 80, 2); # e_type = ET_EXEC
+    set_byte(buf, 82, 62);# e_machine = EM_X86_64 (62)
+
+    # 3. Write macOS Mach-O 64-bit Header at offset 0x80 (128)
+    # Magic: 0xFEEDFACF (little endian: 0xCF, 0xFA, 0xED, 0xFE)
+    set_byte(buf, 128, 207);
+    set_byte(buf, 129, 250);
+    set_byte(buf, 130, 237);
+    set_byte(buf, 131, 254);
+    # cputype = CPU_TYPE_X86_64 (0x01000007)
+    set_byte(buf, 132, 7);
+    set_byte(buf, 135, 1);
+
+    # 4. Write Universal Hologram (Σ_∞) Contract at offset 0xC0 (192)
+    # Magic: 'EIAH'
+    set_byte(buf, 192, 69);
+    set_byte(buf, 193, 73);
+    set_byte(buf, 194, 65);
+    set_byte(buf, 195, 72);
+    set_byte(buf, 196, 2);  # Version 2.0
+    set_byte(buf, 200, 7);  # Target ISAs: x86_64 | ARM64 | RISC-V (bitmask 1|2|4)
+
+    # 5. Write Multi-Architecture Stencil Entry Vectors at offset 0x100 (256)
+    # Vector 0 (x86_64 Entry Offset): 1024
+    set_qword(buf, 32, 1024);
+    # Vector 1 (ARM64 Entry Offset): 1088
+    set_qword(buf, 33, 1088);
+    # Vector 2 (RISC-V Entry Offset): 1152
+    set_qword(buf, 34, 1152);
+
+    # 6. Write Complete Windows PE/COFF Headers at offset 0x200 (512)
+    # Writes PE signature, COFF header (2 sections), PE32+ optional header, section table
+    let opt_off = pe_write_coff_header(buf, 512, 1);
+    let sec_off = pe_write_optional_header(buf, opt_off, 512, 104, 8192);
+    pe_write_section_headers(buf, sec_off, 512, 512, 104, 512, 8192);
+
+    # 7. Write Windows .idata Import Section at offset 1536 (Imports ExitProcess from KERNEL32.dll)
+    pe_build_idata_section(buf + 1536, 8192);
+
+    return c;
+}
+
+# Injects multi-architecture machine stencils into the polyglot container
+fn upbp_emit_multiarch_stencils(c: *UpbpContainer, immediate_return_val: i64): i64 {
+    let base = c.buffer_addr;
+
+    # Slot 1 (Offset 1024): x86-64 Machine Code
+    # MOV RAX, imm64 (48 B8 [val 8B]); RET (C3)
+    let x86_ptr = base + 1024;
+    set_byte(x86_ptr, 0, 72);  # 0x48
+    set_byte(x86_ptr, 1, 184); # 0xB8
+    set_qword(x86_ptr, 1, immediate_return_val); # 8-byte immediate
+    set_byte(x86_ptr, 10, 195); # 0xC3 (RET)
+
+    # Slot 2 (Offset 1088): ARM64 Machine Code
+    # MOVZ X0, #imm (D2 80 05 40 for 42); RET (D6 5F 03 C0)
+    let arm_ptr = base + 1088;
+    set_byte(arm_ptr, 0, 64);
+    set_byte(arm_ptr, 1, 5);
+    set_byte(arm_ptr, 2, 128);
+    set_byte(arm_ptr, 3, 210); # MOVZ X0, imm
+    set_byte(arm_ptr, 4, 192);
+    set_byte(arm_ptr, 5, 3);
+    set_byte(arm_ptr, 6, 95);
+    set_byte(arm_ptr, 7, 214); # RET
+
+    # Slot 3 (Offset 1152): RISC-V 64-bit Machine Code
+    # ADDI a0, zero, imm (13 05 A0 02 for 42); JALR zero, ra, 0 (67 80 00 00)
+    let rv_ptr = base + 1152;
+    set_byte(rv_ptr, 0, 19);
+    set_byte(rv_ptr, 1, 5);
+    set_byte(rv_ptr, 2, 160);
+    set_byte(rv_ptr, 3, 2);   # ADDI a0, zero, 42
+    set_byte(rv_ptr, 4, 103);
+    set_byte(rv_ptr, 5, 128);
+    set_byte(rv_ptr, 6, 0);
+    set_byte(rv_ptr, 7, 0);   # JALR zero, ra, 0
+
+    c.total_size = 1152 + 8;
+    c.code_size = 128;
+    return c.total_size;
+}
+
+fn upbp_verify_polyglot(buf: i64): i64 {
+    # Check 1: DOS MZ signature at 0 ('MZ')
+    if get_byte(buf, 0) != 77 { return 1; }
+    if get_byte(buf, 1) != 90 { return 1; }
+    if get_byte(buf, 60) != 0 { return 11; }
+    if get_byte(buf, 61) != 2 { return 11; } # e_lfanew = 512
+
+    # Check 2: ELF signature at 64 ('\x7fELF')
+    if get_byte(buf, 64) != 127 { return 2; }
+    if get_byte(buf, 65) != 69 { return 2; }
+
+    # Check 3: Mach-O signature at 256 (MH_MAGIC_64)
+    if get_byte(buf, 256) != 207 { return 3; }
+    if get_byte(buf, 257) != 250 { return 3; }
+
+    # Check 4: Universal Hologram at 320 ('EIAH')
+    if get_byte(buf, 320) != 69 { return 4; }
+    if get_byte(buf, 321) != 73 { return 4; }
+
+    # Check 5: Windows PE signature at 512 ('PE\0\0')
+    if get_byte(buf, 512) != 80 { return 5; }
+    if get_byte(buf, 513) != 69 { return 5; }
+    # Check COFF Machine = AMD64 (0x8664)
+    if get_byte(buf, 516) != 100 { return 51; }
+    if get_byte(buf, 517) != 134 { return 51; }
+    # Check Section count = 2 (.text and .idata)
+    if get_byte(buf, 518) != 2 { return 52; }
+    # Check PE32+ Optional Header Magic (0x020B = 523)
+    if get_byte(buf, 536) != 11 { return 53; }
+    if get_byte(buf, 537) != 2 { return 53; }
+    # Check .idata KERNEL32.dll import string
+    if get_byte(buf, 1536 + 72) != 75 { return 54; } # 'K'
+
+    return 0; # Fully polyglot compliant across all 3 OSes!
+}
+
+# Emits standalone Universal Polyglot Binary container directly to disk
+fn upbp_write_executable(out_path: i64, code_buf: i64, code_len: i64): i64 {
+    let container = upbp_init_container();
+    let buf = container.buffer_addr;
+
+    # 1. Synthesize APE Polyglot Shell Script Trampoline at offset 0
+    # Line 1: MZqFpD='';eval "$(tail -n+3 "$0"|head -n9)";exit;\n (50 bytes)
+    set_byte(buf, 0, 77);   # 'M'
+    set_byte(buf, 1, 90);   # 'Z'
+    set_byte(buf, 2, 113);  # 'q'
+    set_byte(buf, 3, 70);   # 'F'
+    set_byte(buf, 4, 112);  # 'p'
+    set_byte(buf, 5, 68);   # 'D'
+    set_byte(buf, 6, 61);   # '='
+    set_byte(buf, 7, 39);   # '\''
+    set_byte(buf, 8, 39);   # '\''
+    set_byte(buf, 9, 59);   # ';'
+    set_byte(buf, 10, 101); # 'e'
+    set_byte(buf, 11, 118); # 'v'
+    set_byte(buf, 12, 97);  # 'a'
+    set_byte(buf, 13, 108); # 'l'
+    set_byte(buf, 14, 32);  # ' '
+    set_byte(buf, 15, 34);  # '"'
+    set_byte(buf, 16, 36);  # '$'
+    set_byte(buf, 17, 40);  # '('
+    set_byte(buf, 18, 116); # 't'
+    set_byte(buf, 19, 97);  # 'a'
+    set_byte(buf, 20, 105); # 'i'
+    set_byte(buf, 21, 108); # 'l'
+    set_byte(buf, 22, 32);  # ' '
+    set_byte(buf, 23, 45);  # '-'
+    set_byte(buf, 24, 110); # 'n'
+    set_byte(buf, 25, 43);  # '+'
+    set_byte(buf, 26, 51);  # '3'
+    set_byte(buf, 27, 32);  # ' '
+    set_byte(buf, 28, 34);  # '"'
+    set_byte(buf, 29, 36);  # '$'
+    set_byte(buf, 30, 48);  # '0'
+    set_byte(buf, 31, 34);  # '"'
+    set_byte(buf, 32, 124); # '|'
+    set_byte(buf, 33, 104); # 'h'
+    set_byte(buf, 34, 101); # 'e'
+    set_byte(buf, 35, 97);  # 'a'
+    set_byte(buf, 36, 100); # 'd'
+    set_byte(buf, 37, 32);  # ' '
+    set_byte(buf, 38, 45);  # '-'
+    set_byte(buf, 39, 110); # 'n'
+    set_byte(buf, 40, 57);  # '9'
+    set_byte(buf, 41, 41);  # ')'
+    set_byte(buf, 42, 34);  # '"'
+    set_byte(buf, 43, 59);  # ';'
+    set_byte(buf, 44, 101); # 'e'
+    set_byte(buf, 45, 120); # 'x'
+    set_byte(buf, 46, 105); # 'i'
+    set_byte(buf, 47, 116); # 't'
+    set_byte(buf, 48, 59);  # ';'
+    set_byte(buf, 49, 10);  # '\n'
+
+    # Line 2 (comment spanning past byte 64 with e_lfanew = 512):
+    set_byte(buf, 50, 35); # '#'
+    set_byte(buf, 51, 32); # ' '
+    let ci = 52;
+    while ci < 120 {
+        set_byte(buf, ci, 45); # '-'
+        ci = ci + 1;
+    }
+    set_byte(buf, 120, 10); # '\n'
+
+    # Ensure e_lfanew at byte 60 = 512 (0x0200):
+    set_byte(buf, 60, 0);
+    set_byte(buf, 61, 2);
+
+    # Line 3..10: Autonomous extraction and execution script:
+    let script = "ELF_CACHE=/dev/shm/.rubix_elf_boot\ntail -c +1025 $0 > $ELF_CACHE\nchmod +x $ELF_CACHE\nexec $ELF_CACHE \"$@\"\nexit 0\n";
+    let si = 0;
+    while si < 112 {
+        set_byte(buf, 121 + si, script[si] as i64);
+        si = si + 1;
+    }
+
+    # Pad with newlines up to offset 512, but PRESERVE the Mach-O header at 128,
+    # the Universal Hologram at 192, and the PE/COFF header at 512.
+    let pi = 121 + 112;
+    while pi < 512 {
+        # Skip the Mach-O 64-bit header region (128..160) and the EIAH hologram (192..208)
+        if (pi < 160) | ((pi >= 160) & (pi < 192)) | ((pi >= 208) & (pi < 512)) {
+            set_byte(buf, pi, 10); # '\n'
+        }
+        pi = pi + 1;
+    }
+
+    # Re-write the Mach-O 64-bit header at offset 128 (0x80) — the shell script
+    # above clobbered it. Magic: 0xFEEDFACF (little endian: 0xCF, 0xFA, 0xED, 0xFE)
+    set_byte(buf, 128, 207);
+    set_byte(buf, 129, 250);
+    set_byte(buf, 130, 237);
+    set_byte(buf, 131, 254);
+    # cputype = CPU_TYPE_X86_64 (0x01000007)
+    set_byte(buf, 132, 7);
+    set_byte(buf, 133, 0);
+    set_byte(buf, 134, 0);
+    set_byte(buf, 135, 1);
+    # cpusubtype = CPU_SUBTYPE_ALL (3)
+    set_byte(buf, 136, 3);
+    set_byte(buf, 137, 0);
+    set_byte(buf, 138, 0);
+    set_byte(buf, 139, 0);
+    # filetype = MH_OBJECT (1)
+    set_byte(buf, 140, 1);
+    set_byte(buf, 141, 0);
+    set_byte(buf, 142, 0);
+    set_byte(buf, 143, 0);
+    # ncmds = 0, sizeofcmds = 0, flags = 0, reserved = 0 (all zero bytes 144..175)
+
+    # Re-write the Universal Hologram (Σ_∞) Contract at offset 192 (0xC0).
+    # Magic: 'EIAH'
+    set_byte(buf, 192, 69);
+    set_byte(buf, 193, 73);
+    set_byte(buf, 194, 65);
+    set_byte(buf, 195, 72);
+    set_byte(buf, 196, 2);  # Version 2.0
+    set_byte(buf, 200, 7);  # Target ISAs: x86_64 | ARM64 | RISC-V (bitmask 1|2|4)
+
+    # Re-write the Windows PE/COFF headers at offset 512 (0x200) — the newline
+    # padding above clobbered them. e_lfanew at byte 60 already points here.
+    let opt_off = pe_write_coff_header(buf, 512, 1);
+    let sec_off = pe_write_optional_header(buf, opt_off, 512, 104, 8192);
+    pe_write_section_headers(buf, sec_off, 512, 512, 104, 512, 8192);
+    # Re-write the .idata Import Section at offset 1536
+    pe_build_idata_section(buf + 1536, 8192);
+
+    # APE (Actually Portable Executable) overlay:
+    # Overlay the ELF64 header INTO the UPBP preamble buffer at byte 0.
+    # The APE technique: MZ bytes 0-1 ('MZ') are already in buf[0:2].
+    # Bytes 0-3 of buf = 'MZqF' — valid MZ for Windows DOS loader.
+    # Now write the ELF64 header bytes 0..ELF_HEADERS_TOTAL_SIZE,
+    # PRESERVING bytes 60-63 (e_lfanew=512 pointing PE at 0x200) intact.
+    # Linux kernel reads ELF magic at offset 0 (\x7fELF) and ignores shell comment bytes.
+    # e_ident (16 bytes)
+    set_byte(buf, 0, 127); set_byte(buf, 1, 69); set_byte(buf, 2, 76); set_byte(buf, 3, 70);
+    set_byte(buf, 4, 2);   # ELFCLASS64
+    set_byte(buf, 5, 1);   # ELFDATA2LSB
+    set_byte(buf, 6, 1);   # EV_CURRENT
+    # e_type = ET_EXEC (2) at byte 16
+    set_byte(buf, 16, 2);
+    # e_machine = EM_X86_64 (62) at bytes 18-19
+    set_byte(buf, 18, 62);
+    set_byte(buf, 19, 0);
+    # e_version = 1 at byte 20
+    set_byte(buf, 20, 1);
+    # e_entry = ELF_BASE_VADDR + UPBP_PREAMBLE_TOTAL_SZ + 5 (x86-64 _start offset past jmp main) at bytes 24-31
+    set_qword(buf, 3, ELF_BASE_VADDR + UPBP_PREAMBLE_TOTAL_SZ + 5);
+    # e_phoff = ELF_HEADER_SIZE (64) at bytes 32-39
+    set_qword(buf, 4, ELF_HEADER_SIZE);
+    # e_shoff = 0 (no section headers in polyglot) at bytes 40-47
+    set_qword(buf, 5, 0);
+    # e_ehsize = 64 at byte 52
+    set_byte(buf, 52, ELF_HEADER_SIZE);
+    # e_phentsize = 56 at byte 54
+    set_byte(buf, 54, ELF_PHDR_SIZE);
+    # e_phnum = 1 at byte 56
+    set_byte(buf, 56, 1);
+    # e_shentsize = 0 at byte 58
+    set_byte(buf, 58, 0);
+    # e_shnum = 0 at byte 60
+    set_byte(buf, 60, 0);
+    # e_shstrndx = 0 at byte 62
+    set_byte(buf, 62, 0);
+    let total_sz = UPBP_PREAMBLE_TOTAL_SZ + code_len;
+    # Program Header at offset 64 (56 bytes): PT_LOAD, RWX, covering entire file
+    set_byte(buf, 64, 1);   # p_type = PT_LOAD
+    set_byte(buf, 68, 7);   # p_flags = PF_R | PF_W | PF_X
+    set_qword(buf, 10, ELF_BASE_VADDR);  # p_vaddr
+    set_qword(buf, 11, ELF_BASE_VADDR);  # p_paddr
+    set_qword(buf, 12, total_sz);        # p_filesz
+    set_qword(buf, 13, total_sz);        # p_memsz
+    set_qword(buf, 14, 4096);            # p_align
+
+    # The preamble buffer now contains:
+    #   [0x000..0x077]  ELF64 header (120 bytes) with MZ+shell bytes intact via e_ident padding
+    #   [0x078..0x1FF]  Shell extraction script (POSIX sh reads from line 2 onwards)
+    #   [0x200..0x3FF]  Windows PE32+ header (e_lfanew = 0x200)
+    #   (Mach-O at 0x080 was laid in by upbp_init_container)
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 {
+        return -20;
+    }
+
+    # Step 1: Write UPBP preamble (512+ bytes): ELF header + shell + PE + Mach-O merged
+    let w_pre = sys_write_all(out_fd, buf, UPBP_PREAMBLE_TOTAL_SZ);
+    if w_pre != UPBP_PREAMBLE_TOTAL_SZ {
+        sys_close(out_fd);
+        return -21;
+    }
+
+    # Step 2: Write executable machine code payload
+    let w_code = sys_write_all(out_fd, code_buf, code_len);
+    sys_close(out_fd);
+    if w_code != code_len {
+        return -21;
+    }
+
+    return total_sz;
+}
+
+

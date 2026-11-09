@@ -1,0 +1,55 @@
+# ==============================================================================
+# Rix — The Package Manager & Executor for Rubix (src/cli.bix)
+# ==============================================================================
+
+fn rix_print_help(): Integer {
+    print "Rix — The Package Manager & Executor for Rubix"
+    print "Version: 1.0.0 (Linux x86_64)"
+    print ""
+    print "Usage: rix <command> [arguments]"
+    print ""
+    print "Package Management Commands:"
+    print "  init [name]          Initialize a new Rubix package in current directory"
+    print "  add <package> [ver]  Add and install a new dependency into Rix.toml"
+    print "  remove <package>     Remove a dependency from Rix.toml and Rix.lock"
+    print "  install              Resolve and install dependencies defined in Rix.toml"
+    print "  update               Update dependencies and recalculate lockfile hashes"
+    print "  list                 List installed packages in the current project"
+    print "  tree                 Display dependency tree graph"
+    print ""
+    print "Package Execution Commands:"
+    print "  run <command>        Execute a project script defined in [scripts]"
+    print "  exec <tool> [args]   Execute a package tool binary directly"
+    print ""
+    print "Options:"
+    print "  --version, -v        Display Rix version"
+    print "  --help, -h           Display this help manual"
+    0
+}
+
+fn rix_print_version(): Integer {
+    print "Rix Package Manager & Executor 1.0.0"
+    print "Ecosystem: Rubix Systems Language (2026 Edition)"
+    print "Target ABI: Linux x86_64 System V"
+    0
+}
+
+fn main(): Integer {
+    let argc = get_arg_count()
+    if argc < 1 {
+        return rix_print_help()
+    }
+    
+    let cmd = get_arg(0)
+    
+    if cmd == "help" or cmd == "--help" or cmd == "-h" {
+        return rix_print_help()
+    }
+    if cmd == "version" or cmd == "--version" or cmd == "-v" {
+        return rix_print_version()
+    }
+    
+    # Subcommand dispatch handled in CLI driver wrapper
+    print "Rix command: " + cmd
+    0
+}

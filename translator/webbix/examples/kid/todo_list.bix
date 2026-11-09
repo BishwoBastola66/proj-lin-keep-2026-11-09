@@ -1,0 +1,8 @@
+use web
+page MyTodos:
+    title "My Weekend Checklist"
+    list:
+        - "Build a fast programming language"
+        - "Write a kid-simple web DSL"
+        - "Deploy to Cloudflare Workers"
+start MyTodos

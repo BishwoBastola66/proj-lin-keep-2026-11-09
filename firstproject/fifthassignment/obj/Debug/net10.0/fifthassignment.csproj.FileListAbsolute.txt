@@ -1,0 +1,14 @@
+/home/bishwaxyz/firstproject/fifthassignment/bin/Debug/net10.0/fifthassignment
+/home/bishwaxyz/firstproject/fifthassignment/bin/Debug/net10.0/fifthassignment.deps.json
+/home/bishwaxyz/firstproject/fifthassignment/bin/Debug/net10.0/fifthassignment.runtimeconfig.json
+/home/bishwaxyz/firstproject/fifthassignment/bin/Debug/net10.0/fifthassignment.dll
+/home/bishwaxyz/firstproject/fifthassignment/bin/Debug/net10.0/fifthassignment.pdb
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/fifthassignment.GeneratedMSBuildEditorConfig.editorconfig
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/fifthassignment.AssemblyInfoInputs.cache
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/fifthassignment.AssemblyInfo.cs
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/fifthassignment.csproj.CoreCompileInputs.cache
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/fifthassignment.dll
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/refint/fifthassignment.dll
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/fifthassignment.pdb
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/fifthassignment.genruntimeconfig.cache
+/home/bishwaxyz/firstproject/fifthassignment/obj/Debug/net10.0/ref/fifthassignment.dll

@@ -1,0 +1,43 @@
+# ==============================================================================
+# RUBIX EXAMPLE: HIGH-PERFORMANCE CXL 3.0 PERSISTENT ORDERBOOK
+# Written in native Rubix (.bix) with u64 primitives
+# ==============================================================================
+
+struct Order {
+    order_id: u64,
+    price: i64,
+    volume: u64
+}
+
+struct Orderbook {
+    total_volume: u64,
+    transaction_count: u64
+}
+
+fn orderbook_new(): *Orderbook {
+    let mem = sys_mmap(0, 4096, 3, 34, -1, 0);
+    let ob = mem as *Orderbook;
+    ob.total_volume = 0;
+    ob.transaction_count = 0;
+    return ob;
+}
+
+fn orderbook_place_order(ob: *Orderbook, order_id: u64, price: i64, volume: u64): u64 {
+    ob.total_volume = ob.total_volume + volume;
+    ob.transaction_count = ob.transaction_count + 1;
+    return ob.total_volume;
+}
+
+fn main(): i64 {
+    let book = orderbook_new();
+
+    orderbook_place_order(book, 1001, 15025, 500);
+    orderbook_place_order(book, 1002, 15100, 250);
+
+    # Total volume: 750
+    print book.total_volume;
+    if book.total_volume != 750 {
+        return 1;
+    }
+    return 0;
+}

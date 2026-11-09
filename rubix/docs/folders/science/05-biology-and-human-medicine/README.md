@@ -1,0 +1,28 @@
+# DOMAIN 05: BIOLOGY, HUMAN ANATOMY & CLINICAL MEDICINE
+## Cellular Architecture, Molecular Biology, The 11 Human Organ Systems, Clinical Breakthroughs, Animal Superpowers, Hemodynamics, and Marine Zoology
+
+> **Directory**: `/home/bishwaxyz/rubix/science/05-biology-and-human-medicine/`  
+> **Status**: Complete Biological & Medical Science Reference Suite  
+> **Scope**: Cellular Dogma, Human Organ Systems, Clinical Medicine, Regenerative Immortality, Extremophiles, Hemodynamics & Blood Flow Physics, Marine Pelagic Zonation, and Hadal Trenches  
+
+---
+
+## Documents in this Domain
+
+1. **[cellular-and-molecular-biology.md](file:///home/bishwaxyz/rubix/science/05-biology-and-human-medicine/cellular-and-molecular-biology.md)**  
+   *Cell Theory, Prokaryotic vs. Eukaryotic Architecture, Organellar Specialization (Mitochondrial Endosymbiosis, Endoplasmic Reticulum, Golgi Apparatus, Lysosomal Autophagy), The Fluid Mosaic Membrane Model, The Sodium-Potassium ATPase Pump, and the Central Dogma of Molecular Biology (DNA Replication, Transcription, Translation, and Ribosomal Kinetics).*
+
+2. **[human-anatomy-organ-systems-and-brain.md](file:///home/bishwaxyz/rubix/science/05-biology-and-human-medicine/human-anatomy-organ-systems-and-brain.md)**  
+   *The Complete Human Body: All 11 Organ Systems (Nervous, Cardiovascular, Respiratory, Digestive, Musculoskeletal, Endocrine, Immune, Renal, Integumentary, Reproductive, Sensory Organs), Neurophysiology of the 86-Billion-Neuron Brain (Hodgkin-Huxley Action Potential, Saltatory Conduction, Neurotransmitters), Hemodynamics of the 4-Chambered Heart, Renal Glomerular Filtration & Countercurrent Multiplication (180 L/day filtered), and The Huxley Sliding Filament Theory of Muscle Contraction.*
+
+3. **[medical-breakthroughs-clinical-science-and-surgery.md](file:///home/bishwaxyz/rubix/science/05-biology-and-human-medicine/medical-breakthroughs-clinical-science-and-surgery.md)**  
+   *The Greatest Milestones in Medical History: Vesalius and Harvey, The Germ Theory of Disease (Ignaz Semmelweis Antiseptic Handwashing, Louis Pasteur, Robert Koch’s Postulates), The Invention of Surgical Anesthesia (Horace Wells, William Morton’s Ether Dome), Antiseptic Surgery (Joseph Lister), The Antibiotic Miracle (Alexander Fleming’s Penicillin), Vaccination (Jenner Smallpox, Salk Polio, Karikó mRNA), Diagnostic Imaging (Wilhelm Röntgen X-Rays, Computed Tomography CT, Magnetic Resonance Imaging MRI at 1.5–3.0 Tesla), Surgical Breakthroughs (Cardiopulmonary Bypass Heart-Lung Machine, First Kidney and Heart Transplants, Cyclosporine Immunosuppression), and Genomic Medicine (CRISPR-Cas9 Programmable Gene Editing, Cancer Checkpoint Immunotherapy).*
+
+4. **[animal-superpowers-extreme-adaptations-and-extinct-abilities.md](file:///home/bishwaxyz/rubix/science/05-biology-and-human-medicine/animal-superpowers-extreme-adaptations-and-extinct-abilities.md)**  
+   *Biological Immortality and Regeneration (Turritopsis dohrnii Transdifferentiation, Axolotl Dedifferentiating Blastema, Planarian cNeoblasts, Naked Mole-Rat Hypoxia/Cancer Immunity), Extremophiles (Tardigrade Dsup Chromatin Shielding & Space Cryptobiosis, Deinococcus radiodurans 15,000 Gy DNA Repair, Mariana Snailfish TMAO Piezolyte Barobiosis), Sensory Superpowers (Electric Eel 860V Electrocytes, Shark 5 nV/cm Ampullae of Lorenzini, Cryptochrome 4 Quantum Spin-State Magnetoreception, Pit Viper TRPA1 0.003°C Thermal Infrared Vision, Mantis Shrimp 16-Photoreceptor Hyperspectral Sight, Sperm Whale 236 dB Sonar), Kinetic Strikes (Mantis Shrimp 104,000 m/s² Cavitation Punch generating 4,700°C Sonoluminescence, Pistol Shrimp 218 dB Bubble Snap, Bombardier Beetle 100°C Pulsed Chemical Cannon, Gecko Van der Waals Adhesion), and Lost Prehistoric Superpowers (Tyrannosaurus rex 57,000 N Bone-Crushing Osteophagy, Quetzalcoatlus 11-Meter Quadrupedal Vault Launch, Dunkleosteus 7,400 N Suction Shear, Anomalocaris 16,000 Ommatidia Compound Eyes, Spinosaurus Pressure Snout, and Smilodon 120° Jaw Gape).*
+
+5. **[hemodynamics-cardiovascular-physics-and-blood-flow.md](file:///home/bishwaxyz/rubix/science/05-biology-and-human-medicine/hemodynamics-cardiovascular-physics-and-blood-flow.md)**  
+   *Fluid Mechanics of Blood: Hagen-Poiseuille Law and the 4th-Power Radius Resistance ($R \propto 1/r^4$), Non-Newtonian Blood Rheology (Casson Model, Hematocrit Viscosity, Rouleaux Shear-Thinning), The Fåhræus–Lindqvist Effect in Microvessels ($<300\text{ }\mu\text{m}$), Left Ventricular Pressure-Volume Loops, Frank-Starling Myocyte Stretch Dynamics, The Aortic Windkessel Elastic Recoil Reservoir, Ernest Starling's Capillary Filtration Flux Equation ($J_v$), Venous Return Valves & Skeletal Muscle Pump, and Comparative Zoology of 2-, 3-, and 4-Chambered Hearts.*
+
+6. **[marine-creatures-oceanic-fauna-and-hadal-adaptations.md](file:///home/bishwaxyz/rubix/science/05-biology-and-human-medicine/marine-creatures-oceanic-fauna-and-hadal-adaptations.md)**  
+   *Oceanic Pelagic Zonation (Epipelagic to Hadalpelagic), Blue Whale Lunge Feeding Biomechanics ($190\text{ tons}$), Regional Endothermy & Countercurrent Rete Mirabile in Bluefin Tuna and Great White Sharks, The Diel Vertical Migration (DVM: 10 billion tons of biomass moving nightly), Counter-Illumination Photophores in Hatchetfish and Lanternfish, Giant Squid ($27\text{ cm}$ Eyes detecting Sperm Whale bioluminescent wakes), Deep-Sea Anglerfish Parasitic Male Tissue Fusion, Tripod Fish Stilts, Hadal Trench Mariana Snailfish at $8{,}178\text{ meters}$, Hydrothermal Vent Chemosynthesis in Riftia Tube Worms (Sulfur-Oxidizing Symbionts), and Sperm Whale Diving Physiology ($2{,}250\text{ meters}$, Alveolar Collapse, and Myoglobin Saturation).*

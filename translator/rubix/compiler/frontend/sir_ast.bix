@@ -1,0 +1,116 @@
+# ==============================================================================
+# Rubix — Semantic AST Node Architecture (SIR)
+# File: compiler/frontend/sir_ast.bix
+#
+# High-Level Semantic AST with Effect and Capability Attributes.
+# Memory Layout (64 bytes per node in flat arena buffer):
+#   slot 0: kind
+#   slot 1: type_id
+#   slot 2: effect_mask
+#   slot 3: capability_mask
+#   slot 4: child_0 / next_sibling
+#   slot 5: child_1 / name_hash
+#   slot 6: child_2 / extra
+#   slot 7: data / value / param_count
+# ==============================================================================
+
+let SIR_NODE_PROGRAM       = 1;
+let SIR_NODE_FN_DECL       = 2;
+let SIR_NODE_PARAM         = 3;
+let SIR_NODE_LET_DECL      = 4;
+let SIR_NODE_BLOCK         = 5;
+let SIR_NODE_IF            = 6;
+let SIR_NODE_WHILE         = 7;
+let SIR_NODE_RETURN        = 8;
+let SIR_NODE_CALL          = 9;
+let SIR_NODE_BIN_OP        = 10;
+let SIR_NODE_UNARY_OP      = 11;
+let SIR_NODE_LIT_INT       = 12;
+let SIR_NODE_LIT_STR       = 13;
+let SIR_NODE_VAR_REF       = 14;
+let SIR_NODE_REGION_BLOCK  = 15;
+let SIR_NODE_MOVE_EXPR     = 16;
+let SIR_NODE_BORROW_EXPR   = 17;
+let SIR_NODE_UNSAFE_BLOCK  = 18;
+
+fn sir_ast_init(buf: i64, capacity: i64): i64 {
+    set_qword(buf, 0, 0);        # node_count = 0
+    set_qword(buf, 1, capacity); # capacity
+    set_qword(buf, 2, 1397314131); # SIR Magic: 'SIR1'
+    return 0;
+}
+
+fn sir_ast_alloc(buf: i64, kind: i64, type_id: i64, effects: i64, caps: i64): i64 {
+    let count = get_qword(buf, 0);
+    let cap = get_qword(buf, 1);
+    if (count < 0) | (count >= cap) { return -1; }
+
+    let node_id = count + 1;
+    let base = buf + 32 + (node_id * 64);
+
+    set_qword(base, 0, kind);
+    set_qword(base, 1, type_id);
+    set_qword(base, 2, effects);
+    set_qword(base, 3, caps);
+    set_qword(base, 4, 0);
+    set_qword(base, 5, 0);
+    set_qword(base, 6, 0);
+    set_qword(base, 7, 0);
+
+    set_qword(buf, 0, count + 1);
+    return node_id;
+}
+
+fn sir_ast_kind(buf: i64, id: i64): i64 {
+    if id <= 0 { return 0; }
+    return get_qword(buf + 32 + (id * 64), 0);
+}
+
+fn sir_ast_type(buf: i64, id: i64): i64 {
+    if id <= 0 { return 0; }
+    return get_qword(buf + 32 + (id * 64), 1);
+}
+
+fn sir_ast_effects(buf: i64, id: i64): i64 {
+    if id <= 0 { return 0; }
+    return get_qword(buf + 32 + (id * 64), 2);
+}
+
+fn sir_ast_caps(buf: i64, id: i64): i64 {
+    if id <= 0 { return 0; }
+    return get_qword(buf + 32 + (id * 64), 3);
+}
+
+fn sir_ast_set_effects(buf: i64, id: i64, eff: i64): i64 {
+    if id <= 0 { return -1; }
+    set_qword(buf + 32 + (id * 64), 2, eff);
+    return 0;
+}
+
+fn sir_ast_set_caps(buf: i64, id: i64, caps: i64): i64 {
+    if id <= 0 { return -1; }
+    set_qword(buf + 32 + (id * 64), 3, caps);
+    return 0;
+}
+
+fn sir_ast_get_child(buf: i64, id: i64, child_idx: i64): i64 {
+    if id <= 0 { return 0; }
+    return get_qword(buf + 32 + (id * 64), 4 + child_idx);
+}
+
+fn sir_ast_set_child(buf: i64, id: i64, child_idx: i64, child_val: i64): i64 {
+    if id <= 0 { return -1; }
+    set_qword(buf + 32 + (id * 64), 4 + child_idx, child_val);
+    return 0;
+}
+
+fn sir_ast_get_data(buf: i64, id: i64): i64 {
+    if id <= 0 { return 0; }
+    return get_qword(buf + 32 + (id * 64), 7);
+}
+
+fn sir_ast_set_data(buf: i64, id: i64, val: i64): i64 {
+    if id <= 0 { return -1; }
+    set_qword(buf + 32 + (id * 64), 7, val);
+    return 0;
+}

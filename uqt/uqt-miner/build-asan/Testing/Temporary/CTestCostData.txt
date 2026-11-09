@@ -1,0 +1,9 @@
+UtilsTest 4 0.016444
+CpuTest 4 0.00507788
+MemoryTest 4 0.00257859
+Sha256dTest 4 0.00282141
+Blake2bTest 3 0.00384803
+AlgoBackendsTest 3 0.599261
+WorkerTest 1 11.0405
+AutotuneTest 1 20.1361
+---

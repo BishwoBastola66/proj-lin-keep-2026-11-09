@@ -1,0 +1,36 @@
+# ==============================================================================
+# Rubix Control Style (RCS) - Kid Counter Stylesheet
+# Zero numbers in styling/motion, zero beziers, pure human words
+# ==============================================================================
+
+card {
+    bg: surface;
+    radius: lg;
+    shadow: soft;
+    center;
+    slide up on load;
+    pop on hover;
+}
+
+button {
+    bg: accent;
+    color: white;
+    radius: md;
+    glow accent on focus;
+    pop on click;
+}
+
+button:hover {
+    bg: #1D4ED8;
+    pop;
+}
+
+.count-display {
+    color: text;
+    size: xl;
+    weight: bold;
+}
+
+.winner when count > 10 {
+    pulse accent forever;
+}

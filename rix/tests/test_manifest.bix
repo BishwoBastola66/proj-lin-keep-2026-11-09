@@ -1,0 +1,47 @@
+# ==============================================================================
+# Rix Checks — Manifest Test Suite (tests/test_manifest.bix)
+# ==============================================================================
+
+fn check_manifest_primitives(): Integer {
+    let toml = "[package]\nname = \"demo_app\"\nversion = \"0.1.0\"\n\n[dependencies]\nwebbix = \"1.0.0\"\n"
+    
+    let name = manifest_parse_field(toml, "name")
+    if name != "demo_app" {
+        return 1
+    }
+    
+    let ver = manifest_parse_field(toml, "version")
+    if ver != "0.1.0" {
+        return 2
+    }
+    
+    if manifest_has_dep(toml, "webbix") != 1 {
+        return 3
+    }
+    if manifest_has_dep(toml, "nonexistent") != 0 {
+        return 4
+    }
+    
+    let added = manifest_add_dep(toml, "logger", "0.2.0")
+    if manifest_has_dep(added, "logger") != 1 {
+        return 5
+    }
+    
+    let removed = manifest_remove_dep(added, "webbix")
+    if manifest_has_dep(removed, "webbix") != 0 {
+        return 6
+    }
+    
+    0
+}
+
+fn main(): Integer {
+    print "Running Rix Check: Manifest Processor..."
+    let status = check_manifest_primitives()
+    if status != 0 {
+        print "  [FAIL] Manifest check failed with code " + int_to_string(status)
+        return 1
+    }
+    print "  [PASS] Manifest: field extraction, dependency check, add dependency, remove dependency"
+    0
+}

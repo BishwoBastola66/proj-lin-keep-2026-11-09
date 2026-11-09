@@ -1,0 +1,13 @@
+# ==============================================================================
+# Rubix Library Package Card Component
+# File: library/app/src/components/package_card.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "theme.bix";
+
+fn comp_package_card(app: *App, name: str, version: str, desc: str, cat: str): void {
+    let title_str = name + " v" + version + " [" + cat + "]";
+    Card(app, title_str);
+    Paragraph(app, desc);
+}

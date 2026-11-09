@@ -1,0 +1,33 @@
+# ==============================================================================
+# Rubix Control Style (RCS) - 3D Interactive Gallery
+# Declarative 3D orbit, flip 3d, and parallax depth
+# ==============================================================================
+
+gallery {
+    row;
+    gap: 24px;
+    padding: 40px;
+    center;
+    orbit gentle forever;
+}
+
+card.photo {
+    width: 240px;
+    height: 320px;
+    radius: 16px;
+    depth 3;
+    shadow: lg;
+    pop on hover springy;
+}
+
+card.photo:hover {
+    flip 3d;
+}
+
+badge.featured {
+    bg: var(--accent);
+    color: white;
+    radius: pill;
+    padding: 4px 12px;
+    float gentle forever;
+}

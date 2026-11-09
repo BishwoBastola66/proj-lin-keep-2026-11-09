@@ -1,0 +1,153 @@
+# ==============================================================================
+# Rubix Standard Library: Binary Wire Protocol (std/wire.bix)
+# Pure Rubix binary wire protocol: opcodes, alignment, and native serializers.
+# ==============================================================================
+
+fn OP_BEGIN_FRAME(): i64 { return 1; }
+fn OP_DRAW_RECT(): i64 { return 2; }
+fn OP_DRAW_TEXT(): i64 { return 3; }
+fn OP_DRAW_LINE(): i64 { return 4; }
+fn OP_DRAW_CIRCLE(): i64 { return 5; }
+fn OP_BIND_HITBOX(): i64 { return 6; }
+fn OP_CLIP_DIRTY(): i64 { return 7; }
+fn OP_UPDATE_WIDGET(): i64 { return 8; }
+fn OP_TEXT_INPUT(): i64 { return 9; }
+fn OP_NAVIGATE(): i64 { return 10; }
+fn OP_FORM_SUBMIT(): i64 { return 11; }
+fn OP_END_FRAME(): i64 { return 255; }
+
+fn wire_align4(n: i64): i64 {
+    let rem = n % 4;
+    if rem == 0 { return n; }
+    return n + (4 - rem);
+}
+
+fn sz_op_begin_frame(): i64 { return 16; }
+fn sz_op_draw_rect(): i64 { return 16; }
+fn sz_op_draw_line(): i64 { return 16; }
+fn sz_op_draw_circle(): i64 { return 12; }
+fn sz_op_bind_hitbox(): i64 { return 16; }
+fn sz_op_clip_dirty(): i64 { return 12; }
+fn sz_op_end_frame(): i64 { return 12; }
+
+fn sz_op_draw_text(text_len: i64): i64 { return 16 + wire_align4(text_len); }
+fn sz_op_update_widget(payload_len: i64): i64 { return 12 + wire_align4(payload_len); }
+fn wire_next_offset(current_offset: i64, op_size: i64): i64 { return current_offset + op_size; }
+
+fn wire_create_buffer(capacity: i64): *u8 { return alloc_buffer(capacity) as *u8; }
+fn wire_free_buffer(buf: *u8, capacity: i64): void { free_buffer(buf as ptr, capacity); }
+
+fn wire_set_i16_at(buf: *u8, off: i64, val: i64): void {
+    buf[off] = (val & 255) as u8;
+    buf[off + 1] = ((val >> 8) & 255) as u8;
+}
+
+fn wire_set_i32_at(buf: *u8, off: i64, val: i64): void {
+    buf[off] = (val & 255) as u8;
+    buf[off + 1] = ((val >> 8) & 255) as u8;
+    buf[off + 2] = ((val >> 16) & 255) as u8;
+    buf[off + 3] = ((val >> 24) & 255) as u8;
+}
+
+fn wire_get_i16_at(buf: *u8, off: i64): i64 {
+    let b0 = buf[off] as i64;
+    let b1 = buf[off + 1] as i64;
+    return b0 | (b1 << 8);
+}
+
+fn wire_get_i32_at(buf: *u8, off: i64): i64 {
+    let b0 = buf[off] as i64;
+    let b1 = buf[off + 1] as i64;
+    let b2 = buf[off + 2] as i64;
+    let b3 = buf[off + 3] as i64;
+    return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+
+fn wire_copy_str(buf: *u8, off: i64, text_str: str, len: i64): void {
+    let i = 0;
+    while i < len {
+        buf[off + i] = text_str[i];
+        i = i + 1;
+    }
+}
+
+fn wire_pack_begin_frame(buf: *u8, off: i64, w: i64, h: i64): i64 {
+    buf[off] = OP_BEGIN_FRAME() as u8;
+    buf[off + 1] = 0 as u8;
+    buf[off + 2] = 0 as u8;
+    buf[off + 3] = 0 as u8;
+    wire_set_i32_at(buf, off + 4, w);
+    wire_set_i32_at(buf, off + 8, h);
+    return off + 16;
+}
+
+fn wire_set_frame_bg(buf: *u8, off: i64, bg_rgba: i64): void {
+    wire_set_i32_at(buf, off + 12, bg_rgba);
+}
+
+fn wire_pack_draw_rect(buf: *u8, off: i64, x: i64, y: i64): i64 {
+    buf[off] = OP_DRAW_RECT() as u8;
+    buf[off + 1] = 0 as u8;
+    wire_set_i16_at(buf, off + 2, x);
+    wire_set_i16_at(buf, off + 4, y);
+    return off + 16;
+}
+
+fn wire_set_rect_dim(buf: *u8, off: i64, w: i64, h: i64): void {
+    wire_set_i16_at(buf, off + 6, w);
+    wire_set_i16_at(buf, off + 8, h);
+}
+
+fn wire_set_rect_style(buf: *u8, off: i64, radius: i64, rgba: i64): void {
+    wire_set_i16_at(buf, off + 10, radius);
+    wire_set_i32_at(buf, off + 12, rgba);
+}
+
+fn wire_pack_draw_text(buf: *u8, off: i64, x: i64, y: i64): i64 {
+    buf[off] = OP_DRAW_TEXT() as u8;
+    buf[off + 1] = 0 as u8;
+    wire_set_i16_at(buf, off + 2, x);
+    wire_set_i16_at(buf, off + 4, y);
+    return off;
+}
+
+fn wire_set_text_data(buf: *u8, off: i64, size: i64, text_str: str): i64 {
+    let tlen = string_length(text_str);
+    wire_set_i16_at(buf, off + 6, size);
+    wire_set_i16_at(buf, off + 8, 600);
+    wire_set_i32_at(buf, off + 10, 4294967295);
+    wire_set_i16_at(buf, off + 14, tlen);
+    if tlen > 0 { wire_copy_str(buf, off + 16, text_str, tlen); }
+    return off + 16 + wire_align4(tlen);
+}
+
+fn wire_set_text_color(buf: *u8, off: i64, rgba: i64): void {
+    wire_set_i32_at(buf, off + 10, rgba);
+}
+
+fn wire_pack_bind_hitbox(buf: *u8, off: i64, id: i64, flags: i64): i64 {
+    buf[off] = OP_BIND_HITBOX() as u8;
+    buf[off + 1] = 0 as u8;
+    wire_set_i32_at(buf, off + 12, id);
+    return off + 16;
+}
+
+fn wire_set_hitbox_bounds(buf: *u8, off: i64, x: i64, y: i64): void {
+    wire_set_i16_at(buf, off + 2, x);
+    wire_set_i16_at(buf, off + 4, y);
+}
+
+fn wire_set_hitbox_dim(buf: *u8, off: i64, w: i64, h: i64): void {
+    wire_set_i16_at(buf, off + 6, w);
+    wire_set_i16_at(buf, off + 8, h);
+}
+
+fn wire_pack_end_frame(buf: *u8, off: i64, frame_id: i64, crc32: i64): i64 {
+    buf[off] = OP_END_FRAME() as u8;
+    buf[off + 1] = 0 as u8;
+    buf[off + 2] = 0 as u8;
+    buf[off + 3] = 0 as u8;
+    wire_set_i32_at(buf, off + 4, frame_id);
+    wire_set_i32_at(buf, off + 8, crc32);
+    return off + 12;
+}

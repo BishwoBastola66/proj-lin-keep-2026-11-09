@@ -1,0 +1,51 @@
+# ==============================================================================
+# Webbix Web IR — Semantic Node (webbix/ir/node.bix)
+# Pure typed Rubix Web IR node representation.
+# Zero HTML tags, zero CSS strings.
+# Exactly 16 fields (Rubix compiler struct table limit).
+# ==============================================================================
+
+include "types.bix";
+include "style.bix";
+include "event.bix";
+
+# ------------------------------------------------------------------------------
+# Semantic Web Node
+# ------------------------------------------------------------------------------
+struct WebNode {
+    id: i64,
+    kind: i64,
+    parent_id: i64,
+    child_count: i64,
+    text: str,
+    aux_text: str,
+    desc: str,
+    link_url: str,
+    placeholder: str,
+    input_kind: i64,
+    style: WebStyle,
+    event: WebEvent,
+    state_binding: i64,
+    state_value: i64,
+    render_mode: i64,
+    is_active: i64
+}
+
+fn web_node_init(node: *WebNode, id: i64, kind: i64, parent_id: i64): void {
+    node.id = id;
+    node.kind = kind;
+    node.parent_id = parent_id;
+    node.child_count = 0;
+    node.text = "";
+    node.aux_text = "";
+    node.desc = "";
+    node.link_url = "";
+    node.placeholder = "";
+    node.input_kind = WebInputKind.Text;
+    web_style_default(&node.style);
+    web_event_default(&node.event);
+    node.state_binding = 0;
+    node.state_value = 0;
+    node.render_mode = WebRenderMode.Client;
+    node.is_active = 1;
+}

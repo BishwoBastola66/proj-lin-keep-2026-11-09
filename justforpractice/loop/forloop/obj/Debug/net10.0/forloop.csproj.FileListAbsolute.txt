@@ -1,0 +1,14 @@
+/home/bishwaxyz/justforpractice/loop/forloop/bin/Debug/net10.0/forloop
+/home/bishwaxyz/justforpractice/loop/forloop/bin/Debug/net10.0/forloop.deps.json
+/home/bishwaxyz/justforpractice/loop/forloop/bin/Debug/net10.0/forloop.runtimeconfig.json
+/home/bishwaxyz/justforpractice/loop/forloop/bin/Debug/net10.0/forloop.dll
+/home/bishwaxyz/justforpractice/loop/forloop/bin/Debug/net10.0/forloop.pdb
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/forloop.GeneratedMSBuildEditorConfig.editorconfig
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/forloop.AssemblyInfoInputs.cache
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/forloop.AssemblyInfo.cs
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/forloop.csproj.CoreCompileInputs.cache
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/forloop.dll
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/refint/forloop.dll
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/forloop.pdb
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/forloop.genruntimeconfig.cache
+/home/bishwaxyz/justforpractice/loop/forloop/obj/Debug/net10.0/ref/forloop.dll

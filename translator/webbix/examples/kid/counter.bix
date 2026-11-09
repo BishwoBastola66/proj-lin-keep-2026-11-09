@@ -1,0 +1,6 @@
+use web
+page Counter:
+    title "Super Counter"
+    text "Current count is " + count
+    button "Click Me" -> count = "1"
+start Counter

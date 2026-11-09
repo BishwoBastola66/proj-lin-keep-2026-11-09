@@ -1,0 +1,226 @@
+# ==============================================================================
+# Rubix Universal Target & Architecture Description Layer
+# Pure Rubix Architecture: Model a target as a composition:
+#   Target = ISA + CPU Features + ABI + OS + ObjectFormat + Runtime + Capabilities
+# Zero external tools, zero Python, zero LLVM.
+# ==============================================================================
+
+use compiler.common.constants;
+
+# ------------------------------------------------------------------------------
+# 1. ISA (Instruction Set Architecture) Identifiers
+# ------------------------------------------------------------------------------
+let ISA_X86_64    = 1;
+let ISA_AARCH64   = 2;
+let ISA_RISCV64   = 3;
+let ISA_WASM32    = 4;
+let ISA_SYNTHETIC = 99;
+
+# ------------------------------------------------------------------------------
+# 2. Hardware Vendor Identifiers
+# ------------------------------------------------------------------------------
+let VENDOR_UNKNOWN = 0;
+let VENDOR_PC      = 1;
+let VENDOR_APPLE   = 2;
+
+# ------------------------------------------------------------------------------
+# 3. Operating System Identifiers
+# ------------------------------------------------------------------------------
+let OS_LINUX   = 1;
+let OS_WINDOWS = 2;
+let OS_DARWIN  = 3;
+let OS_WASI    = 4;
+
+# ------------------------------------------------------------------------------
+# 4. Application Binary Interface (ABI) Calling Conventions
+# ------------------------------------------------------------------------------
+let ABI_SYSV           = 1; # System V AMD64 ABI (rdi, rsi, rdx, rcx, r8, r9)
+let ABI_WIN64          = 2; # Microsoft x64 ABI (rcx, rdx, r8, r9, 32-byte shadow)
+let ABI_AAPCS64        = 3; # ARM 64-bit Architecture PCS (x0-x7)
+let ABI_DARWIN_AAPCS64 = 4; # Apple Silicon Darwin AAPCS64
+let ABI_RISCV_LP64     = 5; # RISC-V LP64 Standard ABI (a0-a7)
+let ABI_WASI           = 6; # WebAssembly WASI ABI
+
+# ------------------------------------------------------------------------------
+# 5. Environment & C Runtime Flavors
+# ------------------------------------------------------------------------------
+let ENV_NONE = 0;
+let ENV_GNU  = 1; # glibc
+let ENV_MUSL = 2; # musl libc
+let ENV_MSVC = 3; # MSVC CRT
+
+# ------------------------------------------------------------------------------
+# 6. Object / Container Formats
+# ------------------------------------------------------------------------------
+let FORMAT_ELF64   = 1;
+let FORMAT_PE_COFF = 2;
+let FORMAT_MACHO   = 3;
+let FORMAT_WASM    = 4;
+
+# ------------------------------------------------------------------------------
+# 7. OS Execution & Runtime Model
+# ------------------------------------------------------------------------------
+let RUNTIME_DIRECT_SYSCALL = 1; # Direct Linux kernel ABI syscalls (zero libc)
+let RUNTIME_LIBRARY_ABI    = 2; # Platform dynamic library imports (Win32 / libSystem)
+let RUNTIME_WASI_IMPORTS   = 3; # Host WebAssembly WASI imports
+
+# ------------------------------------------------------------------------------
+# 8. Platform Capability Bitmask Flags
+# ------------------------------------------------------------------------------
+let CAP_PROCESS         = 1;   # 1 << 0: Process creation, exit, PID
+let CAP_FILE_IO         = 2;   # 1 << 1: Read, write, open, close, seek
+let CAP_MEMORY_MAP      = 4;   # 1 << 2: Virtual memory mmap, mprotect, munmap
+let CAP_THREADS         = 8;   # 1 << 3: Native OS threads, clone, pthread
+let CAP_ATOMICS         = 16;  # 1 << 4: Atomic CAS, load, store, fetch-add
+let CAP_CLOCK           = 32;  # 1 << 5: Monotonic & wall clocks
+let CAP_RANDOM          = 64;  # 1 << 6: Cryptographic / hardware entropy
+let CAP_CONSOLE         = 128; # 1 << 7: Terminal / stdout / stderr I/O
+let CAP_ENV             = 256; # 1 << 8: Environment variables & CLI argv
+let CAP_DYNAMIC_LOADING = 512; # 1 << 9: dlopen / LoadLibrary dynamic symbols
+
+# ------------------------------------------------------------------------------
+# 9. CPU Feature Bitmask Flags
+# ------------------------------------------------------------------------------
+let FEAT_BASELINE  = 1;    # Baseline architecture instructions
+let FEAT_SSE2      = 2;    # x86-64 SSE2
+let FEAT_SSE4      = 4;    # x86-64 SSE4.1/4.2
+let FEAT_AVX       = 8;    # x86-64 AVX 256-bit
+let FEAT_AVX2      = 16;   # x86-64 AVX2
+let FEAT_NEON      = 32;   # AArch64 Advanced SIMD / NEON
+let FEAT_SVE       = 64;   # AArch64 Scalable Vector Extension
+let FEAT_RV_M      = 128;  # RISC-V Integer Multiply/Divide
+let FEAT_RV_A      = 256;  # RISC-V Atomic Instructions
+let FEAT_RV_C      = 512;  # RISC-V Compressed 16-bit instructions
+let FEAT_RV_F      = 1024; # RISC-V Single-precision float
+let FEAT_RV_D      = 2048; # RISC-V Double-precision float
+let FEAT_WASM_SIMD = 4096; # WebAssembly 128-bit SIMD
+
+# ------------------------------------------------------------------------------
+# 10. Target Composition Mapping Primitives
+# ------------------------------------------------------------------------------
+fn target_to_isa(target_id: i64): i64 {
+    if target_id == TARGET_ARM64 { return TARGET_ARM64; }
+    if target_id == TARGET_RISCV64 { return TARGET_RISCV64; }
+    if target_id == TARGET_SYNTHETIC { return TARGET_SYNTHETIC; }
+    # x86_64, Windows x64, macOS x64, and WASI container packaging share the x86-64 machine ISA for payload emission
+    return TARGET_X86_64;
+}
+
+fn target_to_format(target_id: i64): i64 {
+    if target_id == TARGET_WINDOWS { return FORMAT_PE_COFF; }
+    if target_id == TARGET_MACOS { return FORMAT_MACHO; }
+    if target_id == TARGET_WASM { return FORMAT_WASM; }
+    return FORMAT_ELF64;
+}
+
+fn target_to_os(target_id: i64): i64 {
+    if target_id == TARGET_WINDOWS { return OS_WINDOWS; }
+    if target_id == TARGET_MACOS { return OS_DARWIN; }
+    if target_id == TARGET_WASM { return OS_WASI; }
+    return OS_LINUX;
+}
+
+fn target_to_abi(target_id: i64): i64 {
+    if target_id == TARGET_WINDOWS { return ABI_WIN64; }
+    if target_id == TARGET_MACOS { return ABI_DARWIN_AAPCS64; }
+    if target_id == TARGET_ARM64 { return ABI_AAPCS64; }
+    if target_id == TARGET_RISCV64 { return ABI_RISCV_LP64; }
+    if target_id == TARGET_WASM { return ABI_WASI; }
+    return ABI_SYSV;
+}
+
+fn target_to_runtime_model(target_id: i64): i64 {
+    if target_id == TARGET_WINDOWS { return RUNTIME_LIBRARY_ABI; }
+    if target_id == TARGET_MACOS { return RUNTIME_LIBRARY_ABI; }
+    if target_id == TARGET_WASM { return RUNTIME_WASI_IMPORTS; }
+    return RUNTIME_DIRECT_SYSCALL;
+}
+
+# ------------------------------------------------------------------------------
+# 11. Target-Independent Data Layout Query API
+# ------------------------------------------------------------------------------
+fn target_data_layout_pointer_width(target_id: i64): i64 {
+    if target_id == TARGET_WASM { return 4; }
+    return 8;
+}
+
+fn target_data_layout_pointer_align(target_id: i64): i64 {
+    if target_id == TARGET_WASM { return 4; }
+    return 8;
+}
+
+fn target_data_layout_stack_align(target_id: i64): i64 {
+    return 16;
+}
+
+fn target_data_layout_is_little_endian(target_id: i64): i64 {
+    return 1;
+}
+
+fn target_data_layout_string_layout(target_id: i64): i64 {
+    # 64-bit: ptr (8 bytes) + len (8 bytes) = 16 bytes
+    # 32-bit: ptr (4 bytes) + len (4 bytes) = 8 bytes
+    if target_id == TARGET_WASM { return 8; }
+    return 16;
+}
+
+# ------------------------------------------------------------------------------
+# 12. First-Class ABI Query API
+# ------------------------------------------------------------------------------
+fn target_abi_arg_regs(target_id: i64): i64 {
+    let abi = target_to_abi(target_id);
+    if abi == ABI_WIN64 { return 4; } # rcx, rdx, r8, r9
+    if abi == ABI_SYSV { return 6; }  # rdi, rsi, rdx, rcx, r8, r9
+    if abi == ABI_AAPCS64 { return 8; } # x0 - x7
+    if abi == ABI_DARWIN_AAPCS64 { return 8; } # x0 - x7
+    if abi == ABI_RISCV_LP64 { return 8; } # a0 - a7
+    return 0; # WASI stack parameters
+}
+
+fn target_abi_return_reg(target_id: i64): i64 {
+    let abi = target_to_abi(target_id);
+    if abi == ABI_RISCV_LP64 { return 10; } # a0
+    return 0; # rax (x86), x0 (arm)
+}
+
+fn target_abi_shadow_space(target_id: i64): i64 {
+    let abi = target_to_abi(target_id);
+    if abi == ABI_WIN64 { return 32; } # 32-byte home space
+    return 0;
+}
+
+# ------------------------------------------------------------------------------
+# 13. Platform Capabilities & CPU Features Query API
+# ------------------------------------------------------------------------------
+fn target_get_capabilities(target_id: i64): i64 {
+    if target_id == TARGET_WASM {
+        # WASI sandbox: Process, File IO, Clock, Random, Console, Env (no raw mmap)
+        return 483; # CAP_PROCESS | CAP_FILE_IO | CAP_CLOCK | CAP_RANDOM | CAP_CONSOLE | CAP_ENV
+    }
+    if target_id == TARGET_SYNTHETIC {
+        return 129; # CAP_PROCESS | CAP_CONSOLE
+    }
+    # Linux, Windows, macOS full OS capabilities:
+    return 1023;
+}
+
+fn target_has_capability(target_id: i64, cap: i64): i64 {
+    let caps = target_get_capabilities(target_id);
+    if (caps & cap) == cap { return 1; }
+    return 0;
+}
+
+fn target_get_default_features(target_id: i64): i64 {
+    let isa = target_to_isa(target_id);
+    if isa == TARGET_X86_64 { return 3; } # FEAT_BASELINE | FEAT_SSE2
+    if isa == TARGET_ARM64 { return 33; } # FEAT_BASELINE | FEAT_NEON
+    if isa == TARGET_RISCV64 { return 897; } # FEAT_BASELINE | FEAT_RV_M | FEAT_RV_A | FEAT_RV_C
+    if isa == TARGET_WASM { return 1; } # FEAT_BASELINE
+    return 1;
+}
+
+fn target_has_feature(target_id: i64, feat: i64): i64 {
+    let feats = target_get_default_features(target_id);
+    if (feats & feat) == feat { return 1; }
+    return 0;
+}

@@ -1,0 +1,23 @@
+# ==============================================================================
+# Card & Metric Components (components/cards.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+
+fn comp_stat_row(app: *App): void {
+    Stats(app);
+        StatReactive(app, "Live Views", "views");
+        StatMetric(app, "Syscall Latency", "< 1.2 µs");
+        StatMetric(app, "Regressions Clean", "91 / 91");
+        StatMetric(app, "External Runtimes", "0 Byte");
+    End(app);
+}
+
+fn comp_project_grid(app: *App): void {
+    Section(app, "Featured Systems", "Core systems built in pure Rubix.");
+        Grid(app, 2);
+            ProjectCard(app, "Web Framework", "Webbix", "Native Rubix web IR and REX execution.", "Pure Rubix", "TCP Sockets");
+            ProjectCard(app, "Compiler", "Rubix Compiler", "Self-bootstrapping compiler with x86-64 emission.", "Self-Hosted", "Native Code");
+        End(app);
+    End(app);
+}

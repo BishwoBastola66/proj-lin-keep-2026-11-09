@@ -1,0 +1,41 @@
+# ==============================================================================
+# Rix — Master Test Suite Runner (tests/test_all.bix)
+# ==============================================================================
+
+fn main(): Integer {
+    print "======================================================================"
+    print "✦ Rix Package Manager & Executor Verification Test Suite"
+    print "======================================================================"
+    
+    # 1. Manifest Processor
+    print "Running: Manifest Processor Checks..."
+    let m_res = check_manifest_primitives()
+    if m_res != 0 {
+        print "  [FAIL] Manifest checks failed with code " + int_to_string(m_res)
+        return 1
+    }
+    print "  [PASS] Manifest: field extraction, dependency tracking, add/remove mutations"
+    
+    # 2. Lockfile & Integrity Engine
+    print "Running: Lockfile & Integrity Checks..."
+    let l_res = check_lockfile_primitives()
+    if l_res != 0 {
+        print "  [FAIL] Lockfile checks failed with code " + int_to_string(l_res)
+        return 1
+    }
+    print "  [PASS] Lockfile: deterministic hashing, generation, checksum verification"
+    
+    # 3. Dependency Resolver
+    print "Running: Dependency Resolver Checks..."
+    let r_res = check_resolver_primitives()
+    if r_res != 0 {
+        print "  [FAIL] Resolver checks failed with code " + int_to_string(r_res)
+        return 1
+    }
+    print "  [PASS] Resolver: exact match, wildcard, semver constraints, lock format"
+    
+    print "======================================================================"
+    print "ALL RIX INTERNAL UNIT TEST SUITES PASSED (100% SUCCESS)"
+    print "======================================================================"
+    0
+}

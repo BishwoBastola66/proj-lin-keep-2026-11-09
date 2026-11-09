@@ -1,0 +1,215 @@
+# macho.bix - Mach-O executable and object writing
+# Emits 64-bit Mach-O headers and load commands for macOS targets.
+
+let MH_MAGIC_64 = 4277009103; # 0xFEEDFACF
+let CPU_TYPE_X86_64 = 16777223; # 0x01000007
+let CPU_TYPE_ARM64 = 16777228;  # 0x0100000C
+let CPU_SUBTYPE_ALL = 3;
+let MH_OBJECT = 1;
+let MH_EXECUTE = 2;
+
+let LC_SEGMENT_64 = 25;
+let LC_SYMTAB = 2;
+let LC_BUILD_VERSION = 50;
+
+# EIA section flags for Mach-O: S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS
+let MACHO_EIA_FLAGS = 2147484672; # 0x80000400
+
+fn macho_set_u32(buf: i64, off: i64, val: i64): i64 {
+    set_byte(buf, off, val & 255);
+    set_byte(buf, off + 1, (val >> 8) & 255);
+    set_byte(buf, off + 2, (val >> 16) & 255);
+    set_byte(buf, off + 3, (val >> 24) & 255);
+    return 0;
+}
+
+fn macho_set_u64(buf: i64, off: i64, val: i64): i64 {
+    macho_set_u32(buf, off, val & 4294967295);
+    macho_set_u32(buf, off + 4, (val >> 32) & 4294967295);
+    return 0;
+}
+
+# Emit EIA relocation hole table (.eia_reloc) and schema descriptor (.eia_schema)
+# into a Mach-O object file. These sections are placed in a second LC_SEGMENT_64
+# so macOS dyld can load them alongside __text.
+fn macho_write_eia_sections(out_fd: i64, code_len: i64, eia_tbl: i64, tbl_valid: i64): i64 {
+    if (tbl_valid == 0) | (eia_tbl == 0) {
+        return 0;
+    }
+    let hole_cnt = get_qword(eia_tbl, 2000000);
+    let struct_cnt = get_qword(eia_tbl, 17500);
+    if (hole_cnt == 0) & (struct_cnt == 0) {
+        return 0;
+    }
+
+    let reloc_data_len = hole_cnt * 32;
+    let schema_data_len = 0;
+    if struct_cnt > 0 {
+        # schema qword array: [struct_cnt, (struct_name_hash, field_count, field_hash, field_offset)...]
+        let sw = 0;
+        let si = 0;
+        let schema_buf = sys_mmap(0, 65536, 3, 34, -1, 0);
+        set_qword(schema_buf, sw, struct_cnt); sw = sw + 1;
+        while si < struct_cnt {
+            let base = eia_tbl + 140008 + (si * 800);
+            let sname = get_qword(base, 0);
+            let fcount = get_qword(base, 3);
+            set_qword(schema_buf, sw, sname); sw = sw + 1;
+            set_qword(schema_buf, sw, fcount); sw = sw + 1;
+            let f = 0;
+            while f < fcount {
+                let fb = base + 32 + (f * 48);
+                let fh = get_qword(fb, 0);
+                let fo = get_qword(fb, 3);
+                set_qword(schema_buf, sw, fh); sw = sw + 1;
+                set_qword(schema_buf, sw, fo); sw = sw + 1;
+                f = f + 1;
+            }
+            si = si + 1;
+        }
+        schema_data_len = sw * 8;
+        let w_schema = sys_write_all(out_fd, schema_buf, schema_data_len);
+        sys_munmap(schema_buf, 65536);
+        if w_schema != schema_data_len {
+            return -1;
+        }
+    }
+
+    if reloc_data_len > 0 {
+        let hole_base = eia_tbl + 16000008;
+        let w_reloc = sys_write_all(out_fd, hole_base, reloc_data_len);
+        if w_reloc != reloc_data_len {
+            return -1;
+        }
+    }
+
+    return reloc_data_len + schema_data_len;
+}
+
+fn macho_write_object(out_path: i64, code_buf: i64, code_len: i64, target_id: i64): i64 {
+    let hdr_buf = sys_mmap_page();
+    let i = 0;
+    while i < 1024 {
+        set_byte(hdr_buf, i, 0);
+        i = i + 1;
+    }
+
+    # Mach-O 64-bit header (32 bytes)
+    macho_set_u32(hdr_buf, 0, MH_MAGIC_64);
+    let cputype = CPU_TYPE_X86_64;
+    if target_id == 2 {
+        cputype = CPU_TYPE_ARM64;
+    }
+    macho_set_u32(hdr_buf, 4, cputype);
+    macho_set_u32(hdr_buf, 8, CPU_SUBTYPE_ALL);
+    macho_set_u32(hdr_buf, 12, MH_OBJECT);
+    macho_set_u32(hdr_buf, 16, 2); # ncmds: LC_SEGMENT_64 + LC_SYMTAB
+
+    # LC_SEGMENT_64 (72 bytes) + 1 section header (80 bytes) = 152 bytes
+    # LC_SYMTAB (24 bytes). Total load command size = 176 bytes.
+    let sizeofcmds = 176;
+    macho_set_u32(hdr_buf, 20, sizeofcmds);
+    macho_set_u32(hdr_buf, 24, 0); # flags
+    macho_set_u32(hdr_buf, 28, 0); # reserved
+
+    # Command 1: LC_SEGMENT_64 (72 bytes at offset 32)
+    let cmd1_off = 32;
+    macho_set_u32(hdr_buf, cmd1_off + 0, LC_SEGMENT_64);
+    macho_set_u32(hdr_buf, cmd1_off + 4, 152); # cmdsize = 72 + 80
+    macho_set_u64(hdr_buf, cmd1_off + 24, 0);        # vmaddr
+    macho_set_u64(hdr_buf, cmd1_off + 32, code_len); # vmsize
+    let fileoff = 32 + sizeofcmds; # 208: code starts directly after headers
+    macho_set_u64(hdr_buf, cmd1_off + 40, fileoff);
+    macho_set_u64(hdr_buf, cmd1_off + 48, code_len); # filesize
+    macho_set_u32(hdr_buf, cmd1_off + 56, 7);        # maxprot: rwx
+    macho_set_u32(hdr_buf, cmd1_off + 60, 7);        # initprot: rwx
+    macho_set_u32(hdr_buf, cmd1_off + 64, 1);        # nsects = 1
+    macho_set_u32(hdr_buf, cmd1_off + 68, 0);
+
+    # Section 1: "__text" in "__TEXT" (80 bytes at offset 104)
+    let s1_off = cmd1_off + 72;
+    set_byte(hdr_buf, s1_off + 0, 95); set_byte(hdr_buf, s1_off + 1, 95); # "__"
+    set_byte(hdr_buf, s1_off + 2, 116); set_byte(hdr_buf, s1_off + 3, 101); # "te"
+    set_byte(hdr_buf, s1_off + 4, 120); set_byte(hdr_buf, s1_off + 5, 116); # "xt"
+
+    set_byte(hdr_buf, s1_off + 16, 95); set_byte(hdr_buf, s1_off + 17, 95); # "__"
+    set_byte(hdr_buf, s1_off + 18, 84); set_byte(hdr_buf, s1_off + 19, 69); # "TE"
+    set_byte(hdr_buf, s1_off + 20, 88); set_byte(hdr_buf, s1_off + 21, 84); # "XT"
+
+    macho_set_u64(hdr_buf, s1_off + 32, 0);        # addr = 0
+    macho_set_u64(hdr_buf, s1_off + 40, code_len); # size
+    macho_set_u32(hdr_buf, s1_off + 48, fileoff);  # file offset
+    macho_set_u32(hdr_buf, s1_off + 52, 4);        # 2^4 = 16 byte alignment
+    macho_set_u32(hdr_buf, s1_off + 56, 0);        # reloff
+    macho_set_u32(hdr_buf, s1_off + 60, 0);        # nreloc
+    # S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS (0x80000400)
+    macho_set_u32(hdr_buf, s1_off + 64, 2147484672);
+
+    # Command 2: LC_SYMTAB (24 bytes at offset 184)
+    let cmd2_off = s1_off + 80;
+    macho_set_u32(hdr_buf, cmd2_off + 0, LC_SYMTAB);
+    macho_set_u32(hdr_buf, cmd2_off + 4, 24);
+    let symtab_fileoff = fileoff + code_len;
+    macho_set_u32(hdr_buf, cmd2_off + 8, symtab_fileoff);
+    macho_set_u32(hdr_buf, cmd2_off + 12, 1); # 1 symbol: _main
+    let stroff = symtab_fileoff + 16;
+    macho_set_u32(hdr_buf, cmd2_off + 16, stroff);
+    macho_set_u32(hdr_buf, cmd2_off + 20, 16); # string table size
+
+    let out_fd = sys_open(out_path, 577, 493);
+    if out_fd < 0 {
+        sys_munmap(hdr_buf, 4096);
+        return -20;
+    }
+
+    # Write headers and load commands
+    sys_write_all(out_fd, hdr_buf, fileoff);
+    sys_munmap(hdr_buf, 4096);
+
+    # Write code bytes
+    sys_write_all(out_fd, code_buf, code_len);
+
+    # Write nlist_64 symbol table entry (16 bytes: _main)
+    let sym_buf = sys_mmap_page();
+    macho_set_u32(sym_buf, 0, 1); # n_strx: offset into string table
+    # N_SECT | N_EXT (0x0E | 0x01 = 0x0F)
+    set_byte(sym_buf, 4, 15);
+    set_byte(sym_buf, 5, 1);      # n_sect = 1 (__text)
+    set_byte(sym_buf, 6, 0);
+    macho_set_u64(sym_buf, 8, 0); # n_value: offset in section
+    sys_write_all(out_fd, sym_buf, 16);
+
+    # Write string table: "\0_main\0" padded to 16 bytes
+    let str_buf = sys_mmap_page();
+    let si = 0;
+    while si < 16 { set_byte(str_buf, si, 0); si = si + 1; }
+    set_byte(str_buf, 1, 95);  # '_'
+    set_byte(str_buf, 2, 109); # 'm'
+    set_byte(str_buf, 3, 97);  # 'a'
+    set_byte(str_buf, 4, 105); # 'i'
+    set_byte(str_buf, 5, 110); # 'n'
+    sys_write_all(out_fd, str_buf, 16);
+
+    sys_munmap(sym_buf, 4096);
+    sys_munmap(str_buf, 4096);
+
+    # EIA ARLL Relocation + Schema sections appended after __text and symtab.
+    # These are NOT in a Mach-O segment (they are metadata for the EIA runtime),
+    # so we write them raw and return the total file size.
+    let eia_tbl = 0;
+    let tbl_valid = 0;
+    # eia_get_tbl / eia_get_tbl_valid are defined in runtime.bix (loaded via
+    # use compiler.runtime before packaging). They return 0 when no EIA table
+    # is active, so this is a safe no-op for non-EIA compiles.
+    tbl_valid = eia_get_tbl_valid();
+    if tbl_valid == 1 {
+        eia_tbl = eia_get_tbl();
+    }
+    let eia_bytes = macho_write_eia_sections(out_fd, code_len, eia_tbl, tbl_valid);
+    sys_close(out_fd);
+    if eia_bytes < 0 {
+        return -21;
+    }
+
+    return fileoff + code_len + 32 + eia_bytes;
+}

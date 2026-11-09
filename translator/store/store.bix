@@ -1,0 +1,12 @@
+# ==============================================================================
+# Webbix Store Module (store.bix)
+# Central entry and reactive store definitions for the Store website.
+# ==============================================================================
+
+include "webbix/webbix.bix";
+include "state/store.bix";
+include "routes/store.bix";
+
+fn store_init(app: *App): void {
+    app_init_store(app, 2500, 850);
+}

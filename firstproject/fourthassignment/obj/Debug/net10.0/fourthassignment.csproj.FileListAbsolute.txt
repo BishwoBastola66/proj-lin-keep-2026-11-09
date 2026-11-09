@@ -1,0 +1,14 @@
+/home/bishwaxyz/firstproject/fourthassignment/bin/Debug/net10.0/fourthassignment
+/home/bishwaxyz/firstproject/fourthassignment/bin/Debug/net10.0/fourthassignment.deps.json
+/home/bishwaxyz/firstproject/fourthassignment/bin/Debug/net10.0/fourthassignment.runtimeconfig.json
+/home/bishwaxyz/firstproject/fourthassignment/bin/Debug/net10.0/fourthassignment.dll
+/home/bishwaxyz/firstproject/fourthassignment/bin/Debug/net10.0/fourthassignment.pdb
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/fourthassignment.GeneratedMSBuildEditorConfig.editorconfig
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/fourthassignment.AssemblyInfoInputs.cache
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/fourthassignment.AssemblyInfo.cs
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/fourthassignment.csproj.CoreCompileInputs.cache
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/fourthassignment.dll
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/refint/fourthassignment.dll
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/fourthassignment.pdb
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/fourthassignment.genruntimeconfig.cache
+/home/bishwaxyz/firstproject/fourthassignment/obj/Debug/net10.0/ref/fourthassignment.dll

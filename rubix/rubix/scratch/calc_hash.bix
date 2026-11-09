@@ -1,0 +1,19 @@
+fn main(): i64 {
+    let p = sys_mmap_page();
+    # "sys_clock_gettime"
+    set_byte(p, 0, 115); set_byte(p, 1, 121); set_byte(p, 2, 115); set_byte(p, 3, 95);
+    set_byte(p, 4, 99); set_byte(p, 5, 108); set_byte(p, 6, 111); set_byte(p, 7, 99); set_byte(p, 8, 107);
+    set_byte(p, 9, 95); set_byte(p, 10, 103); set_byte(p, 11, 101); set_byte(p, 12, 116);
+    set_byte(p, 13, 116); set_byte(p, 14, 105); set_byte(p, 15, 109); set_byte(p, 16, 101);
+    
+    mut h = 5381;
+    mut i = 0;
+    while i < 17 {
+        let b = get_byte(p, i);
+        h = h * 33 + b;
+        i = i + 1;
+    }
+    print h;
+    sys_munmap(p, 4096);
+    return 0;
+}

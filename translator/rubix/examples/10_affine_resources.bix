@@ -1,0 +1,53 @@
+# ==============================================================================
+# Rubix Example 10: Affine Resources & Move Semantics
+# File: examples/10_affine_resources.bix
+#
+# Demonstrates:
+#   - Affine resource creation.
+#   - Single-owner move semantics.
+#   - Deterministic resource finalization without garbage collection.
+# ==============================================================================
+
+struct SocketStream {
+    fd: i64,
+    bytes_sent: i64
+}
+
+fn open_stream(port: i64): *SocketStream effect(pure) {
+    let s = alloc_buffer(16) as *SocketStream;
+    s.fd = port;
+    s.bytes_sent = 0;
+    return s;
+}
+
+fn transmit_packet(s: *SocketStream, bytes: i64): i64 effect(pure) {
+    s.bytes_sent = s.bytes_sent + bytes;
+    return s.bytes_sent;
+}
+
+fn close_stream(s: *SocketStream): i64 effect(pure) {
+    let total = s.bytes_sent;
+    free_buffer(s as ptr, 16);
+    return total;
+}
+
+fn main(): i64 {
+    println("--- Rubix Example 10: Affine Resources ---");
+
+    # 1. Allocate affine stream handle
+    let stream = open_stream(9001);
+
+    # 2. Mutate state across operations
+    transmit_packet(stream, 512);
+    transmit_packet(stream, 1024);
+
+    # 3. Finalize and close (ownership consumed)
+    let total_transmitted = close_stream(stream);
+
+    println("Total bytes transmitted through affine stream:");
+    print_int(total_transmitted);
+    println("");
+
+    println("--- Example 10 Complete ---");
+    return 0;
+}

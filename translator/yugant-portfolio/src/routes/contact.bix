@@ -1,0 +1,28 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — Contact Route (routes/contact.bix)
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+include "../components/navbar.bix";
+include "../components/footer.bix";
+
+fn render_contact_page(app: *App): void {
+    Page(app, "/contact", "Contact — Yugant Xettri");
+        render_navbar(app);
+
+        Heading(app, "Get in Touch", 1);
+        Paragraph(app, "Interested in systems architecture consulting, compiler development, or high-performance infrastructure? Reach out below.");
+
+        Form(app, 1);
+            FormLabel(app, "Your Name", "name");
+            FormInput(app, "Enter your full name...", "user_name");
+            FormLabel(app, "Your Email", "email");
+            FormInput(app, "Enter your email address...", "user_email");
+            FormLabel(app, "Message / Inquiry", "message");
+            FormTextarea(app, "Write your message or project requirements here...", "user_msg");
+            FormSubmit(app, "Send Inquiry");
+        End(app);
+
+        render_footer(app);
+    End(app);
+}

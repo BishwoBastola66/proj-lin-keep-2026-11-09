@@ -1,0 +1,115 @@
+# ==============================================================================
+# Webbix Framework — Native Web IR & REX Lowering Test Suite
+# File: webbix/tests/test_web_ir.bix
+#
+# Verifies:
+#   1. Native Web IR Construction (Zero HTML, Zero CSS)
+#   2. Declarative Tree Building (App, Page, Nav, Hero, Stats, Grid, Buttons)
+#   3. REX Web Instruction Stream Compilation
+#   4. REX Event Dispatch & Reactive State Evaluation
+#   5. DOM Mutation Record Bridge (std/web.bix compatibility)
+# Zero HTML or CSS string wrappers.
+# ==============================================================================
+
+include "../ir/builder.bix";
+include "../rex/rex_bridge.bix";
+
+let STATE_STARS = 10;
+let STATE_VIEWS = 20;
+
+fn test_web_ir_construction(): i64 {
+    let app: WebApp;
+    web_app_init(&app, "TestApp");
+    web_app_set_state(&app, STATE_STARS, 420);
+    web_app_set_state(&app, STATE_VIEWS, 1000);
+
+    let page = web_page(&app, "/", "Home Page");
+    let nav = web_nav(&app, page, "RubixWeb", "v2.0");
+    web_nav_link(&app, nav, "Docs", "/docs");
+
+    let hero = web_hero(&app, page, "Systems Architecture");
+    web_title(&app, hero, "Native Web Without HTML");
+    web_text(&app, hero, "Compiled directly through REX execution.");
+
+    let btn_star = web_button(&app, hero, "★ Star");
+    web_on_click_increment(&app, btn_star, STATE_STARS);
+
+    let stats = web_stats_grid(&app, page);
+    let c1 = web_stat_card(&app, stats, "Stars Count", STATE_STARS);
+    let c2 = web_stat_card(&app, stats, "Total Views", STATE_VIEWS);
+
+    if app.node_count != 10 { return 0; }
+    if app.nodes[btn_star].event.action_kind != WebActionKind.IncrementState { return 0; }
+    if app.nodes[c1].state_value != 420 { return 0; }
+    if app.nodes[c2].state_value != 1000 { return 0; }
+    return 1;
+}
+
+fn test_rex_instruction_compilation(): i64 {
+    let app: WebApp;
+    web_app_init(&app, "RexApp");
+    web_app_set_state(&app, STATE_STARS, 50);
+
+    let page = web_page(&app, "/", "Rex Title");
+    let hero = web_hero(&app, page, "Tag");
+    let btn = web_button(&app, hero, "Inc");
+    web_on_click_increment(&app, btn, STATE_STARS);
+
+    let insts: [RexWebInstruction; 32];
+    let count = rex_compile_web_app(&app, &insts[0], 32);
+
+    if count <= 3 { return 0; }
+    if insts[0].opcode != REX_WEB_OP_CREATE_NODE { return 0; }
+    return 1;
+}
+
+fn test_rex_event_dispatch_and_state(): i64 {
+    let app: WebApp;
+    web_app_init(&app, "InteractiveApp");
+    web_app_set_state(&app, STATE_STARS, 420);
+
+    let page = web_page(&app, "/", "Interactive");
+    let hero = web_hero(&app, page, "Tag");
+    let btn = web_button(&app, hero, "★ Star");
+    web_on_click_increment(&app, btn, STATE_STARS);
+    let card = web_stat_card(&app, hero, "Live Stars", STATE_STARS);
+
+    # Simulate browser event click dispatched into REX runtime
+    let res1 = rex_dispatch_ui_event(&app, btn, WebEventKind.Click); # 421
+    let res2 = rex_dispatch_ui_event(&app, btn, WebEventKind.Click); # 422
+    let res3 = rex_dispatch_ui_event(&app, btn, WebEventKind.Click); # 423
+
+    if res1 != 421 { return 0; }
+    if res2 != 422 { return 0; }
+    if res3 != 423 { return 0; }
+    if web_app_get_state(&app, STATE_STARS) != 423 { return 0; }
+    if app.nodes[card].state_value != 423 { return 0; }
+    return 1;
+}
+
+fn test_rex_dom_mutations(): i64 {
+    let app: WebApp;
+    web_app_init(&app, "DomApp");
+    web_app_set_state(&app, STATE_STARS, 100);
+
+    let page = web_page(&app, "/", "Title");
+    let hero = web_hero(&app, page, "Pretitle");
+    web_title(&app, hero, "Heading");
+    web_text(&app, hero, "Body");
+
+    let muts: [DomMutationRecord; 32];
+    let count = rex_web_app_to_dom_mutations(&app, &muts[0], 32);
+
+    if count != app.node_count { return 0; }
+    if muts[0].op != DOM_MUT_CREATE_ELEMENT { return 0; }
+    return 1;
+}
+
+fn main(): i64 {
+    if test_web_ir_construction() != 1 { return 1; }
+    if test_rex_instruction_compilation() != 1 { return 2; }
+    if test_rex_event_dispatch_and_state() != 1 { return 3; }
+    if test_rex_dom_mutations() != 1 { return 4; }
+
+    return 42;
+}

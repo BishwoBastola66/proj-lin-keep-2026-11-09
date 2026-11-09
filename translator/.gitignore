@@ -1,0 +1,43 @@
+# ==============================================================================
+# Rubix & Webbix Monorepo — Git Ignore Rules
+# ==============================================================================
+
+# Compiled binaries and intermediate artifacts
+*.bin
+*.elf
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Preserved compiler bootstrap binaries
+!rubix/bin/rubix_stage1
+!rubix/bin/rubix_stage2
+!rubix/bin/rubix_stage3
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+
+# Temporary and debug artifacts
+temp_*
+tmp_*
+test_out.txt
+*.tmp
+*.log
+
+# Editor and OS metadata
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Build and distribution directories
+build/
+dist/
+node_modules/

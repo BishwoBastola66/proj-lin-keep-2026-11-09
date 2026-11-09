@@ -1,0 +1,150 @@
+# ==============================================================================
+# Rubix — Semantic AST Parser (SIR Parser)
+# File: compiler/frontend/sir_parser.bix
+#
+# Parses Rubix programs into SIR AST nodes with effect and capability tracking.
+# ==============================================================================
+
+# Parse effect clause: effect(pure) or effect(io, syscall, net, alloc, unsafe)
+fn sir_parse_effect_clause(src: i64, pos: i64, limit: i64): i64 {
+    let p = pos;
+    while p + 7 <= limit {
+        if (get_byte(src, p) == 101) & (get_byte(src, p + 1) == 102) & (get_byte(src, p + 2) == 102) & (get_byte(src, p + 3) == 101) & (get_byte(src, p + 4) == 99) & (get_byte(src, p + 5) == 116) & (get_byte(src, p + 6) == 40) {
+            # found "effect("
+            p = p + 7;
+            let eff_mask = 0;
+            while (p < limit) & (get_byte(src, p) != 41) { # until ')'
+                if (get_byte(src, p) == 112) & (get_byte(src, p + 1) == 117) & (get_byte(src, p + 2) == 114) & (get_byte(src, p + 3) == 101) { # "pure"
+                    eff_mask = EFFECT_PURE;
+                    p = p + 4;
+                } else if (get_byte(src, p) == 105) & (get_byte(src, p + 1) == 111) { # "io"
+                    eff_mask = eff_mask | EFFECT_IO;
+                    p = p + 2;
+                } else if (get_byte(src, p) == 115) & (get_byte(src, p + 1) == 121) & (get_byte(src, p + 2) == 115) { # "sys"
+                    eff_mask = eff_mask | EFFECT_SYSCALL;
+                    p = p + 7;
+                } else if (get_byte(src, p) == 110) & (get_byte(src, p + 1) == 101) & (get_byte(src, p + 2) == 116) { # "net"
+                    eff_mask = eff_mask | EFFECT_NET;
+                    p = p + 3;
+                } else if (get_byte(src, p) == 97) & (get_byte(src, p + 1) == 108) & (get_byte(src, p + 2) == 108) { # "all"
+                    eff_mask = eff_mask | EFFECT_ALLOC;
+                    p = p + 5;
+                } else if (get_byte(src, p) == 117) & (get_byte(src, p + 1) == 110) & (get_byte(src, p + 2) == 115) { # "uns"
+                    eff_mask = eff_mask | EFFECT_UNSAFE;
+                    p = p + 6;
+                } else {
+                    p = p + 1;
+                }
+            }
+            return eff_mask;
+        }
+        p = p + 1;
+    }
+
+    # Default to pure if no effect clause is specified
+    return EFFECT_PURE;
+}
+
+# Parse capability clause: with(CapFs, CapNet, CapProc, CapUnsafe)
+fn sir_parse_capability_clause(src: i64, pos: i64, limit: i64): i64 {
+    let p = pos;
+    while p + 5 <= limit {
+        if (get_byte(src, p) == 119) & (get_byte(src, p + 1) == 105) & (get_byte(src, p + 2) == 116) & (get_byte(src, p + 3) == 104) & (get_byte(src, p + 4) == 40) {
+            # found "with("
+            p = p + 5;
+            let cap_mask = 0;
+            while (p < limit) & (get_byte(src, p) != 41) { # until ')'
+                if (get_byte(src, p) == 67) & (get_byte(src, p + 1) == 97) & (get_byte(src, p + 2) == 112) { # "Cap"
+                    p = p + 3;
+                    if (get_byte(src, p) == 70) & (get_byte(src, p + 1) == 115) { # "Fs"
+                        cap_mask = cap_mask | CAP_FLAG_FS;
+                        p = p + 2;
+                    } else if (get_byte(src, p) == 78) & (get_byte(src, p + 1) == 101) { # "Net"
+                        cap_mask = cap_mask | CAP_FLAG_NET;
+                        p = p + 3;
+                    } else if (get_byte(src, p) == 80) & (get_byte(src, p + 1) == 114) { # "Proc"
+                        cap_mask = cap_mask | CAP_FLAG_PROC;
+                        p = p + 4;
+                    } else if (get_byte(src, p) == 85) & (get_byte(src, p + 1) == 110) { # "Unsafe"
+                        cap_mask = cap_mask | CAP_FLAG_UNSAFE;
+                        p = p + 6;
+                    } else {
+                        p = p + 1;
+                    }
+                } else {
+                    p = p + 1;
+                }
+            }
+            return cap_mask;
+        }
+        p = p + 1;
+    }
+
+    return CAP_FLAG_NONE;
+}
+
+# Parse top-level program into SIR AST arena
+fn sir_parse_program(src: i64, src_len: i64, ast_buf: i64): i64 {
+    let root = sir_ast_alloc(ast_buf, SIR_NODE_PROGRAM, SIR_TYPE_VOID, EFFECT_PURE, CAP_FLAG_NONE);
+    let p = 0;
+    let prev_decl = 0;
+
+    while p < src_len {
+        # Skip whitespace and comments
+        while p < src_len {
+            let b = get_byte(src, p);
+            if (b == 32) | (b == 9) | (b == 10) | (b == 13) {
+                p = p + 1;
+            } else if b == 35 { # '#' comment
+                while (p < src_len) & (get_byte(src, p) != 10) { p = p + 1; }
+            } else {
+                break;
+            }
+        }
+        if p >= src_len { break; }
+
+        # Check for function declaration "fn "
+        if (p + 3 <= src_len) & (get_byte(src, p) == 102) & (get_byte(src, p + 1) == 110) & (get_byte(src, p + 2) == 32) {
+            p = p + 3;
+            # Scan function name
+            let name_start = p;
+            while (p < src_len) & (sir_is_alpha(get_byte(src, p)) == 1) { p = p + 1; }
+            let name_len = p - name_start;
+            let name_hash = sir_hash_span(src, name_start, name_len);
+
+            # Scan until '{'
+            let sig_start = p;
+            while (p < src_len) & (get_byte(src, p) != 123) { p = p + 1; }
+            let sig_len = p - sig_start;
+
+            # Extract effects and capabilities from signature
+            let eff = sir_parse_effect_clause(src, sig_start, p);
+            let caps = sir_parse_capability_clause(src, sig_start, p);
+
+            # Allocate Function Decl AST Node
+            let fn_node = sir_ast_alloc(ast_buf, SIR_NODE_FN_DECL, SIR_TYPE_I64, eff, caps);
+            sir_ast_set_child(ast_buf, fn_node, 1, name_hash); # name hash in child 1
+
+            if prev_decl == 0 {
+                sir_ast_set_child(ast_buf, root, 0, fn_node);
+            } else {
+                sir_ast_set_child(ast_buf, prev_decl, 0, fn_node);
+            }
+            prev_decl = fn_node;
+
+            # Skip through body to matching '}'
+            let depth = 1;
+            p = p + 1;
+            while (p < src_len) & (depth > 0) {
+                let cb = get_byte(src, p);
+                if cb == 123 { depth = depth + 1; }
+                if cb == 125 { depth = depth - 1; }
+                p = p + 1;
+            }
+        } else {
+            p = p + 1;
+        }
+    }
+
+    return root;
+}

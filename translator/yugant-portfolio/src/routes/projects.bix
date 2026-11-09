@@ -1,0 +1,27 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — Projects Route (routes/projects.bix)
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+include "../components/navbar.bix";
+include "../components/footer.bix";
+
+fn render_projects_page(app: *App): void {
+    Page(app, "/projects", "Projects — Yugant Xettri");
+        render_navbar(app);
+
+        Heading(app, "Systems & Open Source Projects", 1);
+        Text(app, "A showcase of native infrastructure, self-hosted compilers, and high-performance developer tools engineered by Yugant Xettri.");
+
+        Grid(app, 2);
+            ProjectCard(app, "Systems Language", "Rubix Language", "Self-hosting compiled systems language with zero external runtime dependencies.", "x86-64", "Self-Hosted");
+            ProjectCard(app, "Execution Engine", "REX Engine", "Compact, high-throughput execution runtime with direct DOM mutation records.", "Virtual Machine", "Bytecode");
+            ProjectCard(app, "Web Architecture", "Webbix", "Next-generation declarative web framework compiled straight to machine code.", "Native Web", "POSIX Sockets");
+            ProjectCard(app, "Workspace CLI", "RIX CLI", "Unified developer runner, live server, test runner, and project packager.", "Developer CLI", "Tooling");
+            ProjectCard(app, "Operating Systems", "MicroOS Kernel", "Experimental x86-64 microkernel featuring capability-based IPC and preemptive scheduler.", "Kernel", "OSDev");
+            ProjectCard(app, "High-Speed Networking", "HyperNet", "Zero-copy socket abstraction layer supporting epoll, io_uring, and TCP connection pooling.", "Networking", "Zero-Copy");
+        End(app);
+
+        render_footer(app);
+    End(app);
+}

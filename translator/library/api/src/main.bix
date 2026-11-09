@@ -1,0 +1,102 @@
+# ==============================================================================
+# Rubix Library API: Main Server Entry
+# File: library/api/src/main.bix
+# ==============================================================================
+
+use std.core;
+use std.string;
+use std.json;
+use std.http;
+use std.net;
+
+include "routes/search.bix";
+include "routes/pkg.bix";
+include "routes/publish.bix";
+include "routes/report.bix";
+include "routes/keys.bix";
+
+let PORT = 8080;
+let MAX_REQUESTS = -1;
+
+fn api_dispatch_request(method: str, path: str, body: str): str {
+    if string_starts_with(path, "/v1/search") {
+        return api_handle_search("", "");
+    }
+    if string_starts_with(path, "/v1/keys") {
+        return api_handle_get_keys();
+    }
+    if string_starts_with(path, "/v1/publish") {
+        return api_handle_publish("demo-pkg", "1.0.0", "sha256:abc", "clean");
+    }
+    if string_starts_with(path, "/v1/report") {
+        return api_handle_report("demo-pkg", "1.0.0", "malware", "details");
+    }
+    if string_starts_with(path, "/v1/pkg/") {
+        let start_idx: i64 = 8;
+        let total_len: i64 = string_length(path);
+        let sub_len: i64 = total_len - start_idx;
+        let slug = string_slice(path, start_idx, sub_len);
+        return api_handle_get_pkg(slug);
+    }
+    let lb = json_lbrace();
+    let rb = json_rbrace();
+    let err_pair = json_build_pair("error", json_encode_str("Route not found"));
+    return lb + err_pair + rb;
+}
+
+fn api_serve_http(port: i64, max_requests: i64): i64 {
+    let server_fd = net_tcp_listen(port, 128);
+    if server_fd < 0 {
+        println("[RUBIX API ERROR] Failed to bind TCP socket on port " + port);
+        return 1;
+    }
+    println("[RUBIX API] Native HTTP server listening on http://0.0.0.0:" + port);
+
+    let count: i64 = 0;
+    let running: i64 = 1;
+    while running == 1 {
+        let client_fd = net_tcp_accept(server_fd);
+        if client_fd >= 0 {
+            let req_data = net_tcp_recv(client_fd, 4096);
+            let rlen = string_length(req_data);
+            if rlen > 0 {
+                let sp1: i64 = 0;
+                while (sp1 < rlen) & ((req_data[sp1] as i64) != 32) {
+                    sp1 = sp1 + 1;
+                }
+                let method = string_slice(req_data, 0, sp1);
+
+                let sp2: i64 = sp1 + 1;
+                while (sp2 < rlen) & ((req_data[sp2] as i64) != 32) {
+                    sp2 = sp2 + 1;
+                }
+                let path = string_slice(req_data, sp1 + 1, sp2 - sp1 - 1);
+
+                let body_resp = api_dispatch_request(method, path, "");
+                let blen = string_length(body_resp);
+
+                let resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + blen + "\r\nConnection: close\r\n\r\n" + body_resp;
+                net_tcp_send(client_fd, resp);
+            }
+            net_tcp_close(client_fd);
+            count = count + 1;
+            if (max_requests > 0) & (count >= max_requests) {
+                running = 0;
+            }
+        }
+    }
+    net_tcp_close(server_fd);
+    println("[RUBIX API] Server shut down cleanly.");
+    return 0;
+}
+
+fn main(): i64 {
+    println("[RUBIX API] Library v1 API service initialized.");
+    if MAX_REQUESTS >= 0 {
+        return api_serve_http(PORT, MAX_REQUESTS);
+    }
+    let sample = api_dispatch_request("GET", "/v1/search", "");
+    println(sample);
+    return 0;
+}
+

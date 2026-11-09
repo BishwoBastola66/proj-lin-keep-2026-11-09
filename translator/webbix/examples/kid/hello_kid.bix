@@ -1,0 +1,7 @@
+use web
+page Home:
+    title "Hello World"
+    text "Welcome to my Rubix webpage!"
+    button "Greet" -> name = "Alex"
+    input name
+start Home

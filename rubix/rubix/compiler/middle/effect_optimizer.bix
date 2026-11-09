@@ -1,0 +1,31 @@
+# ==============================================================================
+# Rubix — Effect-Directed Optimizer
+# File: compiler/middle/effect_optimizer.bix
+#
+# Exploits algebraic effect knowledge for aggressive optimization:
+#   - Purity-directed Dead Code Elimination (DCE)
+#   - Side-effect free constant folding
+# ==============================================================================
+
+fn air_opt_pure_dce(air_buf: i64): i64 {
+    let count = air_get_count(air_buf);
+    let eliminated = 0;
+    let i = 0;
+
+    # Scan for dead pure operations
+    while i < count {
+        let op = air_get_op(air_buf, i);
+        let dst = air_get_dst(air_buf, i);
+
+        # If a pure constant or move is never referenced
+        if (op == AIR_OP_CONST) & (dst < 0) {
+            # Mark opcode as NO-OP (0)
+            let addr = air_buf + 64 + (i * 48);
+            set_qword(addr, 0, 0);
+            eliminated = eliminated + 1;
+        }
+        i = i + 1;
+    }
+
+    return eliminated;
+}

@@ -1,0 +1,108 @@
+# ==============================================================================
+# Webbix Framework — End-to-End Counter Application (webbix/examples/counter_app.bix)
+# Pure Rubix web application demonstrating:
+#   1. Application initialization (WebbixApp)
+#   2. Routing ("/" -> CounterPage, "/about" -> AboutPage)
+#   3. Composed component hierarchy (App -> Header -> Counter -> Badge)
+#   4. Reactive state management (count: 0 -> 2)
+#   5. Event dispatch (click on increment button)
+#   6. HTTP request dispatch and 200 OK response
+# ==============================================================================
+
+include "../state/reactive.bix";
+include "../components/component.bix";
+include "../routing/router.bix";
+include "../server/http.bix";
+include "../client/client.bix";
+include "../runtime/runtime.bix";
+include "../framework/app.bix";
+
+fn run_counter_app(): i64 {
+    # 1. Initialize Application Container
+    let app: WebbixApp;
+    webbix_app_init(&app, 1);
+    webbix_app_start(&app);
+
+    # 2. Setup Routing Table
+    let router: WebbixRouter;
+    webbix_router_init(&router);
+    
+    let route_home: WebbixRoute;
+    webbix_router_add(&router, &route_home, 1, 1, 10, WEBMIX_METHOD_GET); # "/" -> CounterPage (comp 10)
+    webbix_app_add_route(&app);
+
+    let route_about: WebbixRoute;
+    webbix_router_add(&router, &route_about, 2, 2, 20, WEBMIX_METHOD_GET); # "/about" -> AboutPage (comp 20)
+    webbix_app_add_route(&app);
+
+    # 3. Setup Reactive State Store
+    let state: WebbixStateStore;
+    webbix_state_init(&state, 1);
+    let KEY_COUNTER = 100;
+    webbix_state_set(&state, KEY_COUNTER, 0);
+
+    # 4. Construct Component Hierarchy (Composition)
+    # Root Page Component
+    let page: WebbixComponent;
+    webbix_component_init(&page, 1, 10, KEY_COUNTER);
+    webbix_app_register_component(&app);
+
+    # Composed Child: Header Component
+    let header: WebbixComponent;
+    webbix_component_init(&header, 2, 11, 0);
+    webbix_component_compose_child(&page, &header);
+
+    # Composed Child: Metrics Badge Component
+    let badge: WebbixComponent;
+    webbix_component_init(&badge, 3, 12, 0);
+    webbix_component_compose_child(&page, &badge);
+
+    # 5. Build Virtual DOM Nodes
+    let root_vnode: WebbixVNode;
+    webbix_vnode_init(&root_vnode, 10, WEBMIX_TAG_MAIN, 0);
+
+    let btn_inc: WebbixVNode;
+    webbix_vnode_init(&btn_inc, 11, WEBMIX_TAG_BUTTON, 10);
+    webbix_vnode_add_listener(&btn_inc, WEBMIX_EVENT_CLICK);
+
+    # 6. Simulate Client Interactive Event Dispatch
+    let client: WebbixClientContext;
+    webbix_client_init(&client, 1);
+
+    # User clicks "Increment" button twice
+    webbix_client_dispatch_event(&client, btn_inc.node_id, WEBMIX_EVENT_CLICK, 1);
+    webbix_state_increment(&state, KEY_COUNTER);
+    webbix_app_record_event(&app);
+
+    webbix_client_dispatch_event(&client, btn_inc.node_id, WEBMIX_EVENT_CLICK, 1);
+    webbix_state_increment(&state, KEY_COUNTER);
+    webbix_app_record_event(&app);
+
+    let final_count = webbix_state_get(&state, KEY_COUNTER); # Should be 2
+
+    # 7. Render Component with Updated State
+    webbix_component_render(&page, &root_vnode, final_count);
+
+    # 8. Dispatch HTTP Request to Route "/"
+    let req: WebbixRequest;
+    webbix_request_init(&req, 1, WEBMIX_METHOD_GET, 1);
+
+    let comp_resolved = webbix_router_resolve(&route_home, req.path_id, req.method);
+    let res: WebbixResponse;
+    webbix_http_handle_route(&res, &req, comp_resolved);
+
+    # 9. Verification Assertions
+    if app.is_running != 1 { return 1; }
+    if page.child_comp_count != 2 { return 2; }
+    if final_count != 2 { return 3; }
+    if root_vnode.state_ref != 2 { return 4; }
+    if res.status != 200 { return 5; }
+    if client.dispatched_count != 2 { return 6; }
+
+    # Everything succeeded: return 42
+    return 42;
+}
+
+fn main(): i64 {
+    return run_counter_app();
+}

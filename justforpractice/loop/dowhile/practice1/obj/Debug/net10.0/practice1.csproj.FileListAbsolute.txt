@@ -1,0 +1,14 @@
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/practice1.GeneratedMSBuildEditorConfig.editorconfig
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/practice1.AssemblyInfoInputs.cache
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/practice1.AssemblyInfo.cs
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/practice1.csproj.CoreCompileInputs.cache
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/bin/Debug/net10.0/practice1
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/bin/Debug/net10.0/practice1.deps.json
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/bin/Debug/net10.0/practice1.runtimeconfig.json
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/bin/Debug/net10.0/practice1.dll
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/bin/Debug/net10.0/practice1.pdb
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/practice1.dll
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/refint/practice1.dll
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/practice1.pdb
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/practice1.genruntimeconfig.cache
+/home/bishwaxyz/justforpractice/loop/dowhile/practice1/obj/Debug/net10.0/ref/practice1.dll

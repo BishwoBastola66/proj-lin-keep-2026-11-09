@@ -1,0 +1,42 @@
+# ==============================================================================
+# Rubix — Capability Security Model
+# File: compiler/common/capabilities.bix
+#
+# Enforces Zero-Ambient Authority at Compile-Time:
+#   Privileged operations require an explicit, unforgeable capability token.
+# ==============================================================================
+
+let CAP_FLAG_NONE   = 0;
+let CAP_FLAG_FS     = 1;  # File System (open, read, write, stat, close)
+let CAP_FLAG_NET    = 2;  # Network (socket, bind, listen, connect, send, recv)
+let CAP_FLAG_PROC   = 4;  # Process Management (spawn, fork, wait, kill, exit)
+let CAP_FLAG_UNSAFE = 8;  # Raw Pointer Dereference & External C-ABI FFI
+let CAP_FLAG_TIME   = 16; # Hardware Clock & Wall Timers
+let CAP_FLAG_RANDOM = 32; # Hardware Entropy & Random Number Generation
+let CAP_FLAG_ALL    = 63; # Root Process Authority
+
+fn cap_has(held_mask: i64, required_cap: i64): i64 {
+    if (held_mask & required_cap) == required_cap {
+        return 1;
+    }
+    return 0;
+}
+
+fn cap_add(mask: i64, new_cap: i64): i64 {
+    return mask | new_cap;
+}
+
+fn cap_remove(mask: i64, drop_cap: i64): i64 {
+    return mask & (~drop_cap);
+}
+
+fn cap_name(cap_flag: i64): str {
+    if cap_flag == CAP_FLAG_FS     { return "CapFs"; }
+    if cap_flag == CAP_FLAG_NET    { return "CapNet"; }
+    if cap_flag == CAP_FLAG_PROC   { return "CapProc"; }
+    if cap_flag == CAP_FLAG_UNSAFE { return "CapUnsafe"; }
+    if cap_flag == CAP_FLAG_TIME   { return "CapTime"; }
+    if cap_flag == CAP_FLAG_RANDOM { return "CapRandom"; }
+    if cap_flag == CAP_FLAG_ALL    { return "MasterCap"; }
+    return "CapNone";
+}

@@ -1,0 +1,25 @@
+# ==============================================================================
+# Rubix Standard Library: Command Line Interface (std/cli.bix)
+# Modern CLI argument predicates, flag detection, and exit status helpers.
+# ==============================================================================
+
+fn cli_is_flag(arg: str): bool {
+    let l = arg.len();
+    if l < 2 { return false; }
+    return (arg[0] == (45 as u8)); # '-'
+}
+
+fn cli_is_help(arg: str): bool {
+    return (arg == "-h") | (arg == "--help");
+}
+
+fn cli_is_version(arg: str): bool {
+    return (arg == "-v") | (arg == "--version");
+}
+
+fn cli_exit_success(): i64 = 0;
+
+fn cli_exit_failure(): i64 = 1;
+
+fn cli_match_subcommand(arg: str, target: str): bool =
+    arg == target;

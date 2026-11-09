@@ -1,0 +1,79 @@
+# ==============================================================================
+# Rubix Library API: Package Route (/v1/pkg/{name})
+# File: library/api/src/routes/pkg.bix
+# ==============================================================================
+
+use std.core;
+use std.string;
+use std.json;
+
+fn api_handle_get_pkg(name: str): str {
+    let lb = json_lbrace();
+    let rb = json_rbrace();
+
+    # Versions object
+    let v_lb = json_lbrace();
+    let v_rb = json_rbrace();
+
+    let tb_url = "https://r2.rubix-lang.org/tarballs/" + name + "-1.0.0.tar.gz";
+    let enc_tb = json_encode_str(tb_url);
+    let enc_ver = json_encode_str("1.0.0");
+    let enc_integ = json_encode_str("sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    let enc_verdict = json_encode_str("clean");
+
+    let v1 = v_lb + json_build_pair("version", enc_ver) + "," +
+                    json_build_pair("integrity", enc_integ) + "," +
+                    json_build_pair("ai_verdict", enc_verdict) + "," +
+                    json_build_pair("tarball_url", enc_tb) + v_rb;
+
+    let versions_obj = lb + json_build_pair("1.0.0", v1) + rb;
+
+    let desc_str = "High performance Rubix package: " + name;
+    let enc_desc = json_encode_str(desc_str);
+    let enc_name = json_encode_str(name);
+    let enc_cat = json_encode_str("tools");
+    let enc_lic = json_encode_str("MIT");
+
+    let part_name = json_build_pair("name", enc_name);
+    let part_desc = json_build_pair("description", enc_desc);
+    let part_cat = json_build_pair("category", enc_cat);
+    let part_lic = json_build_pair("license", enc_lic);
+    let part_vers = json_build_pair("versions", versions_obj);
+
+    let resp = lb + part_name + "," + part_desc + "," + part_cat + "," + part_lic + "," + part_vers + rb;
+    return resp;
+}
+
+fn api_handle_get_version(name: str, version: str): str {
+    let lb = json_lbrace();
+    let rb = json_rbrace();
+
+    let enc_name = json_encode_str(name);
+    let enc_ver = json_encode_str(version);
+    let enc_verdict = json_encode_str("clean");
+    let tb_url = "https://r2.rubix-lang.org/tarballs/" + name + "-" + version + ".tar.gz";
+    let enc_url = json_encode_str(tb_url);
+
+    let part_name = json_build_pair("name", enc_name);
+    let part_ver = json_build_pair("version", enc_ver);
+    let part_verdict = json_build_pair("ai_verdict", enc_verdict);
+    let part_url = json_build_pair("tarball_url", enc_url);
+
+    let resp = lb + part_name + "," + part_ver + "," + part_verdict + "," + part_url + rb;
+    return resp;
+}
+
+fn api_handle_get_tarball_url(name: str, version: str): str {
+    let lb = json_lbrace();
+    let rb = json_rbrace();
+    let url_val = "https://r2.rubix-lang.org/tarballs/" + name + "-" + version + ".tar.gz";
+    let enc_url = json_encode_str(url_val);
+    let expire_num: i64 = 3600;
+    let enc_exp = json_encode_int(expire_num);
+
+    let part_url = json_build_pair("url", enc_url);
+    let part_exp = json_build_pair("expires_in_seconds", enc_exp);
+
+    let resp = lb + part_url + "," + part_exp + rb;
+    return resp;
+}

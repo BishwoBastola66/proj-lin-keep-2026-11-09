@@ -1,0 +1,16 @@
+# ==============================================================================
+# Rubix Adversarial Test Suite — Purity Violation Detection
+# File: tests/test_adversarial_purity.bix
+#
+# Asserts that declaring a function 'pure' while holding system capabilities
+# or performing impure operations is strictly rejected at compile time.
+# ==============================================================================
+
+fn illegal_pure_with_capability(): i64 effect(pure) with(CapFs) {
+    # VIOLATION: Pure functions cannot hold system capabilities!
+    return 1;
+}
+
+fn main(): i64 effect(pure) {
+    return illegal_pure_with_capability();
+}

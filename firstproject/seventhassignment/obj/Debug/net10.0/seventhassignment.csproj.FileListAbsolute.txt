@@ -1,0 +1,14 @@
+/home/bishwaxyz/firstproject/seventhassignment/bin/Debug/net10.0/seventhassignment
+/home/bishwaxyz/firstproject/seventhassignment/bin/Debug/net10.0/seventhassignment.deps.json
+/home/bishwaxyz/firstproject/seventhassignment/bin/Debug/net10.0/seventhassignment.runtimeconfig.json
+/home/bishwaxyz/firstproject/seventhassignment/bin/Debug/net10.0/seventhassignment.dll
+/home/bishwaxyz/firstproject/seventhassignment/bin/Debug/net10.0/seventhassignment.pdb
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/seventhassignment.GeneratedMSBuildEditorConfig.editorconfig
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/seventhassignment.AssemblyInfoInputs.cache
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/seventhassignment.AssemblyInfo.cs
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/seventhassignment.csproj.CoreCompileInputs.cache
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/seventhassignment.dll
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/refint/seventhassignment.dll
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/seventhassignment.pdb
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/seventhassignment.genruntimeconfig.cache
+/home/bishwaxyz/firstproject/seventhassignment/obj/Debug/net10.0/ref/seventhassignment.dll

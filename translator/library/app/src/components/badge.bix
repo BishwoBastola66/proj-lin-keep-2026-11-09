@@ -1,0 +1,19 @@
+# ==============================================================================
+# Rubix Library Badge Component
+# File: library/app/src/components/badge.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "theme.bix";
+
+fn comp_badge_verdict(app: *App, verdict: str): void {
+    if verdict == "clean" {
+        Badge(app, "AI Verified: Clean");
+    } else {
+        Badge(app, "Security Review");
+    }
+}
+
+fn comp_badge_category(app: *App, cat: str): void {
+    Badge(app, cat);
+}

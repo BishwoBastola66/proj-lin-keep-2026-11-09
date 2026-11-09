@@ -1,0 +1,11 @@
+# ==============================================================================
+# Rubix Library Search Bar Component
+# File: library/app/src/components/search_bar.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "theme.bix";
+
+fn comp_search_bar(app: *App): void {
+    Hero(app, "Ecosystem Registry", "Find packages for Rubix", "Content-addressed, signed, AI-scanned packages ready to install via rix add.", "Browse Packages", "/packages");
+}

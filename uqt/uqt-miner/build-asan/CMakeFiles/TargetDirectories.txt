@@ -1,0 +1,15 @@
+/home/bishwaxyz/uqt/uqt-miner/build-asan/CMakeFiles/uqt_miner.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/CMakeFiles/test.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/CMakeFiles/edit_cache.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/CMakeFiles/rebuild_cache.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_utils.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_cpu.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_memory.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_sha256d.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_blake2b.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_algo_backends.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_worker.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test_autotune.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/test.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/edit_cache.dir
+/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/CMakeFiles/rebuild_cache.dir

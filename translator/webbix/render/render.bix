@@ -1,0 +1,329 @@
+# ==============================================================================
+# Webbix Web IR to HTML5 Serializer (webbix/render/render.bix)
+# Pure Rubix native serializer compiling Web IR trees into semantic HTML5.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. ASCII Brace Helpers (Prevents Rubix string interpolation syntax errors)
+# ------------------------------------------------------------------------------
+
+fn webbix_lbrace(): str {
+    let buf = alloc_buffer(2) as *u8;
+    buf[0] = 123 as u8; # '{'
+    buf[1] = 0 as u8;
+    let s = buf as str;
+    free_buffer(buf as ptr, 2);
+    return s;
+}
+
+fn webbix_rbrace(): str {
+    let buf = alloc_buffer(2) as *u8;
+    buf[0] = 125 as u8; # '}'
+    buf[1] = 0 as u8;
+    let s = buf as str;
+    free_buffer(buf as ptr, 2);
+    return s;
+}
+
+fn webbix_css_rule(sel: str, props: str, lb: str, rb: str): str {
+    return sel + " " + lb + " " + props + " " + rb + "\n";
+}
+
+# ------------------------------------------------------------------------------
+# 2. Integer Formatting
+# ------------------------------------------------------------------------------
+
+fn webbix_int_to_str(val: i64): str {
+    if val == 0 { return "0"; }
+    let is_neg = 0;
+    let n = val;
+    if n < 0 {
+        is_neg = 1;
+        n = -n;
+    }
+    let digits = "";
+    while n > 0 {
+        let rem = n % 10;
+        let c = "";
+        if rem == 0 { c = "0"; }
+        if rem == 1 { c = "1"; }
+        if rem == 2 { c = "2"; }
+        if rem == 3 { c = "3"; }
+        if rem == 4 { c = "4"; }
+        if rem == 5 { c = "5"; }
+        if rem == 6 { c = "6"; }
+        if rem == 7 { c = "7"; }
+        if rem == 8 { c = "8"; }
+        if rem == 9 { c = "9"; }
+        digits = c + digits;
+        n = n / 10;
+    }
+    if is_neg == 1 {
+        digits = "-" + digits;
+    }
+    return digits;
+}
+
+# ------------------------------------------------------------------------------
+# 3. Base Semantic CSS Engine
+# ------------------------------------------------------------------------------
+
+fn webbix_render_css(theme: i64, lb: str, rb: str): str {
+    let c = "";
+    c = c + webbix_css_rule("*,*::before,*::after", "box-sizing:border-box;margin:0;padding:0;", lb, rb);
+
+    if theme == 1 {
+        # Light Theme (Clean White Palette with crisp dark typography & sleek subtle elevation)
+        c = c + webbix_css_rule("body", "background:#ffffff;color:#0f172a;font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.6;min-height:100vh;overflow-x:hidden;", lb, rb);
+        c = c + webbix_css_rule("a", "color:inherit;text-decoration:none;", lb, rb);
+        c = c + webbix_css_rule("nav", "display:flex;justify-content:space-between;align-items:center;padding:16px 32px;background:rgba(255,255,255,0.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(0,0,0,0.08);position:sticky;top:0;z-index:100;", lb, rb);
+        c = c + webbix_css_rule(".brand", "font-size:1.25rem;font-weight:800;letter-spacing:-0.02em;color:#0f172a;display:flex;align-items:center;gap:12px;", lb, rb);
+        c = c + webbix_css_rule(".nav-links", "display:flex;gap:20px;align-items:center;", lb, rb);
+        c = c + webbix_css_rule(".nav-link", "color:#475569;font-size:0.95rem;transition:color 0.2s;", lb, rb);
+        c = c + webbix_css_rule(".nav-link:hover", "color:#0f172a;", lb, rb);
+        c = c + webbix_css_rule("main", "max-width:1100px;margin:0 auto;padding:40px 24px;", lb, rb);
+        c = c + webbix_css_rule(".hero", "text-align:center;padding:70px 20px 50px;max-width:850px;margin:0 auto;", lb, rb);
+        c = c + webbix_css_rule(".eyebrow", "font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#0284c7;margin-bottom:16px;display:inline-block;", lb, rb);
+        c = c + webbix_css_rule(".headline", "font-size:3.2rem;font-weight:900;line-height:1.15;margin-bottom:20px;letter-spacing:-0.03em;color:#0f172a;", lb, rb);
+        c = c + webbix_css_rule(".desc", "font-size:1.15rem;color:#475569;line-height:1.6;margin-bottom:32px;", lb, rb);
+        c = c + webbix_css_rule(".btn", "display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:10px;font-size:0.95rem;font-weight:600;cursor:pointer;border:1px solid transparent;background:#4f46e5;color:#ffffff;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 4px 14px rgba(79,70,229,0.25);", lb, rb);
+        c = c + webbix_css_rule(".btn:hover", "transform:translateY(-2px);box-shadow:0 6px 20px rgba(79,70,229,0.35);", lb, rb);
+        c = c + webbix_css_rule(".stats-grid", "display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:40px 0 60px;", lb, rb);
+        c = c + webbix_css_rule(".stat-card", "background:#f8fafc;border:1px solid rgba(0,0,0,0.08);border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.03);", lb, rb);
+        c = c + webbix_css_rule(".stat-val", "font-size:1.8rem;font-weight:800;color:#0f172a;font-family:monospace;", lb, rb);
+        c = c + webbix_css_rule(".stat-lbl", "font-size:0.8rem;color:#64748b;text-transform:uppercase;margin-top:4px;", lb, rb);
+        c = c + webbix_css_rule(".section", "margin:60px 0;", lb, rb);
+        c = c + webbix_css_rule(".section-title", "font-size:1.8rem;font-weight:800;margin-bottom:8px;color:#0f172a;", lb, rb);
+        c = c + webbix_css_rule(".section-sub", "font-size:1rem;color:#475569;margin-bottom:24px;", lb, rb);
+        c = c + webbix_css_rule(".grid-2", "display:grid;grid-template-columns:repeat(2,1fr);gap:20px;", lb, rb);
+        c = c + webbix_css_rule(".card", "background:#ffffff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:border-color 0.2s,box-shadow 0.2s,transform 0.2s;", lb, rb);
+        c = c + webbix_css_rule(".card:hover", "border-color:rgba(99,102,241,0.4);box-shadow:0 8px 24px rgba(0,0,0,0.08);transform:translateY(-2px);", lb, rb);
+        c = c + webbix_css_rule(".card-title", "font-size:1.2rem;font-weight:700;color:#0f172a;margin-bottom:8px;", lb, rb);
+        c = c + webbix_css_rule(".card-desc", "color:#475569;margin-bottom:12px;", lb, rb);
+        c = c + webbix_css_rule(".badge", "display:inline-block;padding:4px 10px;font-size:0.75rem;font-weight:600;border-radius:9999px;background:rgba(99,102,241,0.1);color:#4338ca;margin:4px;", lb, rb);
+        c = c + webbix_css_rule("footer", "border-top:1px solid rgba(0,0,0,0.08);padding:32px;text-align:center;color:#64748b;font-size:0.85rem;margin-top:60px;", lb, rb);
+        c = c + webbix_css_rule("@media (max-width:768px)", ".grid-2" + lb + "grid-template-columns:1fr;" + rb + " nav" + lb + "flex-direction:column;gap:12px;" + rb + " .headline" + lb + "font-size:2.2rem;" + rb, lb, rb);
+        return c;
+    }
+
+    # Dark Theme (default)
+    c = c + webbix_css_rule("body", "background:#090d16;color:#f1f5f9;font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.6;min-height:100vh;overflow-x:hidden;", lb, rb);
+    c = c + webbix_css_rule("a", "color:inherit;text-decoration:none;", lb, rb);
+    c = c + webbix_css_rule("nav", "display:flex;justify-content:space-between;align-items:center;padding:16px 32px;background:rgba(15,23,42,0.85);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,0.08);position:sticky;top:0;z-index:100;", lb, rb);
+    c = c + webbix_css_rule(".brand", "font-size:1.25rem;font-weight:800;letter-spacing:-0.02em;color:#fff;display:flex;align-items:center;gap:12px;", lb, rb);
+    c = c + webbix_css_rule(".nav-links", "display:flex;gap:20px;align-items:center;", lb, rb);
+    c = c + webbix_css_rule(".nav-link", "color:#94a3b8;font-size:0.95rem;transition:color 0.2s;", lb, rb);
+    c = c + webbix_css_rule(".nav-link:hover", "color:#fff;", lb, rb);
+    c = c + webbix_css_rule("main", "max-width:1100px;margin:0 auto;padding:40px 24px;", lb, rb);
+    c = c + webbix_css_rule(".hero", "text-align:center;padding:70px 20px 50px;max-width:850px;margin:0 auto;", lb, rb);
+    c = c + webbix_css_rule(".eyebrow", "font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#38bdf8;margin-bottom:16px;display:inline-block;", lb, rb);
+    c = c + webbix_css_rule(".headline", "font-size:3.2rem;font-weight:900;line-height:1.15;margin-bottom:20px;letter-spacing:-0.03em;color:#ffffff;", lb, rb);
+    c = c + webbix_css_rule(".desc", "font-size:1.15rem;color:#94a3b8;line-height:1.6;margin-bottom:32px;", lb, rb);
+    c = c + webbix_css_rule(".btn", "display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:10px;font-size:0.95rem;font-weight:600;cursor:pointer;border:1px solid transparent;background:#4f46e5;color:#fff;transition:transform 0.2s,box-shadow 0.2s;", lb, rb);
+    c = c + webbix_css_rule(".btn:hover", "transform:translateY(-2px);box-shadow:0 6px 20px rgba(79,70,229,0.45);", lb, rb);
+    c = c + webbix_css_rule(".stats-grid", "display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:40px 0 60px;", lb, rb);
+    c = c + webbix_css_rule(".stat-card", "background:rgba(30,41,59,0.5);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:20px;text-align:center;", lb, rb);
+    c = c + webbix_css_rule(".stat-val", "font-size:1.8rem;font-weight:800;color:#fff;font-family:monospace;", lb, rb);
+    c = c + webbix_css_rule(".stat-lbl", "font-size:0.8rem;color:#94a3b8;text-transform:uppercase;margin-top:4px;", lb, rb);
+    c = c + webbix_css_rule(".section", "margin:60px 0;", lb, rb);
+    c = c + webbix_css_rule(".section-title", "font-size:1.8rem;font-weight:800;margin-bottom:8px;color:#fff;", lb, rb);
+    c = c + webbix_css_rule(".section-sub", "font-size:1rem;color:#94a3b8;margin-bottom:24px;", lb, rb);
+    c = c + webbix_css_rule(".grid-2", "display:grid;grid-template-columns:repeat(2,1fr);gap:20px;", lb, rb);
+    c = c + webbix_css_rule(".card", "background:rgba(30,41,59,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:24px;transition:border-color 0.2s;", lb, rb);
+    c = c + webbix_css_rule(".card:hover", "border-color:rgba(99,102,241,0.4);", lb, rb);
+    c = c + webbix_css_rule(".card-title", "font-size:1.2rem;font-weight:700;color:#fff;margin-bottom:8px;", lb, rb);
+    c = c + webbix_css_rule(".card-desc", "color:#94a3b8;margin-bottom:12px;", lb, rb);
+    c = c + webbix_css_rule(".badge", "display:inline-block;padding:4px 10px;font-size:0.75rem;font-weight:600;border-radius:9999px;background:rgba(99,102,241,0.2);color:#a5b4fc;margin:4px;", lb, rb);
+    c = c + webbix_css_rule("footer", "border-top:1px solid rgba(255,255,255,0.08);padding:32px;text-align:center;color:#64748b;font-size:0.85rem;margin-top:60px;", lb, rb);
+    c = c + webbix_css_rule("@media (max-width:768px)", ".grid-2" + lb + "grid-template-columns:1fr;" + rb + " nav" + lb + "flex-direction:column;gap:12px;" + rb + " .headline" + lb + "font-size:2.2rem;" + rb, lb, rb);
+    return c;
+}
+
+# ------------------------------------------------------------------------------
+# 4. Recursive Web IR Tree Serializer
+# ------------------------------------------------------------------------------
+
+fn webbix_render_children(app: *WebApp, parent_id: i64, ui: *Ui): str {
+    let out = "";
+    let i = 0;
+    while i < app.node_count {
+        if app.nodes[i].parent_id == parent_id {
+            out = out + webbix_render_node(app, i, ui);
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+fn webbix_render_node(app: *WebApp, nid: i64, ui: *Ui): str {
+    let k = app.nodes[nid].kind;
+
+    # Page Root
+    if k == (WebKind.Page as i64) {
+        return "<main data-route=\"" + app.nodes[nid].link_url + "\">\n" + webbix_render_children(app, nid, ui) + "</main>\n";
+    }
+
+    # Navigation
+    if k == (WebKind.Nav as i64) {
+        let brand = app.nodes[nid].text;
+        let badge = app.nodes[nid].aux_text;
+        let nav = "<nav><div class=\"brand\">" + brand;
+        if badge.len() > 0 {
+            nav = nav + " <span class=\"badge\">" + badge + "</span>";
+        }
+        nav = nav + "</div><div class=\"nav-links\">" + webbix_render_children(app, nid, ui) + "</div></nav>\n";
+        return nav;
+    }
+
+    # NavLink
+    if k == (WebKind.NavLink as i64) {
+        return "<a href=\"" + app.nodes[nid].link_url + "\" class=\"nav-link\">" + app.nodes[nid].text + "</a>\n";
+    }
+
+    # Hero
+    if k == (WebKind.Hero as i64) {
+        let h = "<section class=\"hero\">\n";
+        if app.nodes[nid].aux_text.len() > 0 {
+            h = h + "  <span class=\"eyebrow\">" + app.nodes[nid].aux_text + "</span>\n";
+        }
+        if app.nodes[nid].text.len() > 0 {
+            h = h + "  <h1 class=\"headline\">" + app.nodes[nid].text + "</h1>\n";
+        }
+        if app.nodes[nid].desc.len() > 0 {
+            h = h + "  <p class=\"desc\">" + app.nodes[nid].desc + "</p>\n";
+        }
+        h = h + webbix_render_children(app, nid, ui) + "</section>\n";
+        return h;
+    }
+
+    # Headings
+    if k == (WebKind.Title as i64) {
+        return "<h1 class=\"headline\">" + app.nodes[nid].text + "</h1>\n";
+    }
+    if k == (WebKind.Heading as i64) {
+        return "<h2 class=\"section-title\">" + app.nodes[nid].text + "</h2>\n";
+    }
+
+    # Text & Paragraphs
+    if (k == (WebKind.Text as i64)) | (k == (WebKind.Paragraph as i64)) {
+        return "<p class=\"desc\">" + app.nodes[nid].text + "</p>\n";
+    }
+
+    # Button
+    if k == (WebKind.Button as i64) {
+        if app.nodes[nid].link_url.len() > 0 {
+            return "<a href=\"" + app.nodes[nid].link_url + "\" class=\"btn\">" + app.nodes[nid].text + "</a>\n";
+        }
+        return "<button type=\"button\" class=\"btn\">" + app.nodes[nid].text + "</button>\n";
+    }
+
+    # Stats Grid & Stat Card
+    if k == (WebKind.StatsGrid as i64) {
+        return "<div class=\"stats-grid\">\n" + webbix_render_children(app, nid, ui) + "</div>\n";
+    }
+    if k == (WebKind.StatCard as i64) {
+        let val_str = app.nodes[nid].desc;
+        if app.nodes[nid].state_binding > 0 {
+            let s_val = web_app_get_state(app, app.nodes[nid].state_binding);
+            val_str = webbix_int_to_str(s_val);
+        }
+        return "<div class=\"stat-card\"><div class=\"stat-val\">" + val_str + "</div><div class=\"stat-lbl\">" + app.nodes[nid].text + "</div></div>\n";
+    }
+
+    # Section
+    if k == (WebKind.Section as i64) {
+        let s = "<section class=\"section\">\n";
+        s = s + "  <h2 class=\"section-title\">" + app.nodes[nid].text + "</h2>\n";
+        if app.nodes[nid].desc.len() > 0 {
+            s = s + "  <p class=\"section-sub\">" + app.nodes[nid].desc + "</p>\n";
+        }
+        s = s + webbix_render_children(app, nid, ui) + "</section>\n";
+        return s;
+    }
+
+    # Grid
+    if k == (WebKind.Grid as i64) {
+        return "<div class=\"grid-2\">\n" + webbix_render_children(app, nid, ui) + "</div>\n";
+    }
+
+    # Project Card / Card
+    if (k == (WebKind.ProjectCard as i64)) | (k == (WebKind.Card as i64)) | (k == (WebKind.Badge as i64)) {
+        let c = "<div class=\"card\">\n";
+        if app.nodes[nid].aux_text.len() > 0 {
+            c = c + "  <span class=\"badge\">" + app.nodes[nid].aux_text + "</span>\n";
+        }
+        c = c + "  <h3 class=\"card-title\">" + app.nodes[nid].text + "</h3>\n";
+        if app.nodes[nid].desc.len() > 0 {
+            c = c + "  <p class=\"card-desc\">" + app.nodes[nid].desc + "</p>\n";
+        }
+        c = c + webbix_render_children(app, nid, ui) + "</div>\n";
+        return c;
+    }
+
+    # Form
+    if k == (WebKind.Form as i64) {
+        let act = "/contact";
+        if app.nodes[nid].link_url.len() > 0 {
+            act = app.nodes[nid].link_url;
+        }
+        return "<form method=\"POST\" action=\"" + act + "\" style=\"max-width:500px;margin:0 auto;\">\n" + webbix_render_children(app, nid, ui) + "<button type=\"submit\" class=\"btn\" style=\"width:100%;margin-top:16px;\">Send Message</button>\n</form>\n";
+    }
+
+    # Input
+    if k == (WebKind.Input as i64) {
+        return "<div style=\"margin-bottom:16px;\"><label style=\"display:block;margin-bottom:6px;font-size:0.85rem;color:#94a3b8;\">" + app.nodes[nid].placeholder + "</label><input type=\"text\" name=\"" + app.nodes[nid].placeholder + "\" placeholder=\"" + app.nodes[nid].placeholder + "\" style=\"width:100%;padding:10px 14px;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;\" required /></div>\n";
+    }
+
+    # Footer
+    if k == (WebKind.Footer as i64) {
+        return "<footer><p>" + app.nodes[nid].text + "</p></footer>\n";
+    }
+
+    # Generic Fallback
+    return webbix_render_children(app, nid, ui);
+}
+
+# ------------------------------------------------------------------------------
+# 5. Full Document Assembly
+# ------------------------------------------------------------------------------
+
+fn webbix_render_document(app: *WebApp, ui: *Ui, page_node_id: i64, param_val: str): str {
+    let lb = webbix_lbrace();
+    let rb = webbix_rbrace();
+
+    let title = app.name;
+    let desc = app.description;
+    if desc.len() == 0 {
+        desc = "Native high-performance web application built with Webbix.";
+    }
+
+    if (page_node_id >= 0) & (page_node_id < app.node_count) {
+        if app.nodes[page_node_id].text.len() > 0 {
+            title = app.nodes[page_node_id].text + " — " + app.name;
+        }
+    }
+
+    let doc = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n";
+    doc = doc + "  <meta charset=\"UTF-8\">\n";
+    doc = doc + "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
+    doc = doc + "  <title>" + title + "</title>\n";
+    doc = doc + "  <meta name=\"description\" content=\"" + desc + "\">\n";
+    doc = doc + "  <style>\n" + webbix_render_css(app.theme, lb, rb) + "  </style>\n";
+    doc = doc + "</head>\n<body>\n";
+
+    if (page_node_id >= 0) & (page_node_id < app.node_count) {
+        doc = doc + webbix_render_node(app, page_node_id, ui);
+    } else {
+        # 404 Not Found Page
+        doc = doc + "<nav><div class=\"brand\"><a href=\"/\">" + app.name + "</a></div><div class=\"nav-links\"><a href=\"/\" class=\"nav-link\">Home</a></div></nav>\n";
+        doc = doc + "<main style=\"text-align:center;padding:100px 20px;\">\n";
+        doc = doc + "  <h1 class=\"headline\">404 Not Found</h1>\n";
+        doc = doc + "  <p class=\"desc\">The requested route does not exist on this Webbix native server.</p>\n";
+        doc = doc + "  <a href=\"/\" class=\"btn\">Back to Home</a>\n";
+        doc = doc + "</main>\n";
+        doc = doc + "<footer><p>Webbix Native Architecture</p></footer>\n";
+    }
+
+    doc = doc + "</body>\n</html>\n";
+    return doc;
+}

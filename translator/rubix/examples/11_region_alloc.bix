@@ -1,0 +1,64 @@
+# ==============================================================================
+# Rubix Example 11: Lexical Region Arenas & Zero-Cost Allocation
+# File: examples/11_region_alloc.bix
+#
+# Demonstrates:
+#   - Bump allocation within a region arena.
+#   - Zero garbage collection pauses.
+#   - O(1) instantaneous arena tear-down.
+# ==============================================================================
+
+struct FrameArena {
+    memory: ptr,
+    used: i64,
+    limit: i64
+}
+
+fn arena_setup(a: *FrameArena, memory: ptr, limit: i64): i64 effect(pure) {
+    a.memory = memory;
+    a.used = 0;
+    a.limit = limit;
+    return 0;
+}
+
+fn arena_bump(a: *FrameArena, bytes: i64): ptr effect(pure) {
+    let aligned = (bytes + 7) & (0 - 8);
+    if (a.used + aligned) > a.limit {
+        return 0 as ptr;
+    }
+    let p = (a.memory as i64 + a.used) as ptr;
+    a.used = a.used + aligned;
+    return p;
+}
+
+fn main(): i64 {
+    println("--- Rubix Example 11: Region Arenas ---");
+
+    # 1. Allocate backing store for frame arena
+    let memory_block = alloc_buffer(8192);
+    let arena = FrameArena {
+        memory: 0 as ptr,
+        used: 0,
+        limit: 0
+    };
+    arena_setup(&arena, memory_block, 8192);
+
+    # 2. Bump allocate temporary structures without malloc overhead
+    let item1 = arena_bump(&arena, 64) as *i64;
+    let item2 = arena_bump(&arena, 64) as *i64;
+    set_qword(item1 as i64, 0, 777);
+    set_qword(item2 as i64, 0, 888);
+
+    println("Values allocated in region arena:");
+    print_int(get_qword(item1 as i64, 0));
+    print_int(get_qword(item2 as i64, 0));
+    println("");
+
+    # 3. Instantaneous O(1) tear-down: reset used counter
+    arena.used = 0;
+    println("Region arena reset instantaneously to 0 used bytes.");
+
+    free_buffer(memory_block, 8192);
+    println("--- Example 11 Complete ---");
+    return 0;
+}

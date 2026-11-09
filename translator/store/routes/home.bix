@@ -1,0 +1,20 @@
+# ==============================================================================
+# Home Page Route (routes/home.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+include "../state/store.bix";
+include "../components/navbar.bix";
+include "../components/hero.bix";
+include "../components/cards.bix";
+include "../components/footer.bix";
+
+fn route_home_build(app: *App): void {
+    Page(app, "/", "Home");
+        comp_navbar(app, "My Portfolio");
+        comp_hero(app, "Architecting Native Web Systems", "Zero HTML strings. Zero CSS concatenation. 100% native.");
+        comp_stat_row(app);
+        comp_project_grid(app);
+        comp_footer(app, "Built natively with Webbix & Rubix.");
+    End(app);
+}

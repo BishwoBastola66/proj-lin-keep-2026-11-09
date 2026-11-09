@@ -1,0 +1,14 @@
+/home/bishwaxyz/firstproject/thirdassignment/bin/Debug/net10.0/thirdassignment
+/home/bishwaxyz/firstproject/thirdassignment/bin/Debug/net10.0/thirdassignment.deps.json
+/home/bishwaxyz/firstproject/thirdassignment/bin/Debug/net10.0/thirdassignment.runtimeconfig.json
+/home/bishwaxyz/firstproject/thirdassignment/bin/Debug/net10.0/thirdassignment.dll
+/home/bishwaxyz/firstproject/thirdassignment/bin/Debug/net10.0/thirdassignment.pdb
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/thirdassignment.GeneratedMSBuildEditorConfig.editorconfig
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/thirdassignment.AssemblyInfoInputs.cache
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/thirdassignment.AssemblyInfo.cs
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/thirdassignment.csproj.CoreCompileInputs.cache
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/thirdassignment.dll
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/refint/thirdassignment.dll
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/thirdassignment.pdb
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/thirdassignment.genruntimeconfig.cache
+/home/bishwaxyz/firstproject/thirdassignment/obj/Debug/net10.0/ref/thirdassignment.dll

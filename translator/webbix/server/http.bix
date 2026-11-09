@@ -1,0 +1,273 @@
+# ==============================================================================
+# Webbix Framework — HTTP Server & Protocol Layer (webbix/server/http.bix)
+# Pure Rubix implementation of typed request decoding, response synthesizing,
+# status codes, MIME types, and HTTP/1.1 lifecycle.
+# ==============================================================================
+
+include "../../rubix/std/string.bix";
+
+# ------------------------------------------------------------------------------
+# HTTP Status Codes
+# ------------------------------------------------------------------------------
+let WEBMIX_HTTP_OK             = 200;
+let WEBMIX_HTTP_CREATED        = 201;
+let WEBMIX_HTTP_NO_CONTENT     = 204;
+let WEBMIX_HTTP_MOVED_PERM     = 301;
+let WEBMIX_HTTP_FOUND          = 302;
+let WEBMIX_HTTP_NOT_MODIFIED   = 304;
+let WEBMIX_HTTP_BAD_REQUEST    = 400;
+let WEBMIX_HTTP_UNAUTHORIZED   = 401;
+let WEBMIX_HTTP_FORBIDDEN      = 403;
+let WEBMIX_HTTP_NOT_FOUND      = 404;
+let WEBMIX_HTTP_METHOD_NOT_ALL = 405;
+let WEBMIX_HTTP_INTERNAL_ERROR = 500;
+
+# ------------------------------------------------------------------------------
+# MIME Type Constants
+# ------------------------------------------------------------------------------
+let WEBMIX_MIME_HTML = 1;
+let WEBMIX_MIME_JSON = 2;
+let WEBMIX_MIME_CSS  = 3;
+let WEBMIX_MIME_TEXT = 4;
+
+# Legacy structures (maintained for test battery compatibility)
+struct WebbixRequest {
+    req_id: i64,
+    method: i64,
+    path_id: i64,
+    body_len: i64
+}
+
+struct WebbixResponse {
+    req_id: i64,
+    status: i64,
+    content_type: i64,
+    body_len: i64
+}
+
+fn webbix_request_init(
+    req: *WebbixRequest,
+    req_id: i64,
+    method: i64,
+    path_id: i64
+): void {
+    req.req_id = req_id;
+    req.method = method;
+    req.path_id = path_id;
+    req.body_len = 0;
+}
+
+fn webbix_response_init(
+    res: *WebbixResponse,
+    req_id: i64,
+    status: i64,
+    content_type: i64,
+    body_len: i64
+): void {
+    res.req_id = req_id;
+    res.status = status;
+    res.content_type = content_type;
+    res.body_len = body_len;
+}
+
+fn webbix_http_handle_route(
+    res: *WebbixResponse,
+    req: *WebbixRequest,
+    resolved_comp_type: i64
+): void {
+    if resolved_comp_type > 0 {
+        webbix_response_init(res, req.req_id, WEBMIX_HTTP_OK, WEBMIX_MIME_HTML, 128);
+    } else {
+        webbix_response_init(res, req.req_id, WEBMIX_HTTP_NOT_FOUND, WEBMIX_MIME_HTML, 32);
+    }
+}
+
+# ------------------------------------------------------------------------------
+# Real Typed HTTP/1.1 Request & Response (<= 16 fields per struct)
+# ------------------------------------------------------------------------------
+
+struct HttpRequest {
+    method: str,
+    path: str,
+    query: str,
+    version: str,
+    content_length: i64,
+    content_type: str,
+    connection: str,
+    body: str,
+    keep_alive: i64,
+    host: str
+}
+
+struct HttpResponse {
+    status: i64,
+    content_type: str,
+    body: str,
+    location: str,
+    keep_alive: i64
+}
+
+fn http_parse_int(s: str): i64 {
+    let len = s.len();
+    if len == 0 { return 0; }
+    let res = 0;
+    let i = 0;
+    while i < len {
+        let c = s[i] as i64;
+        if (c >= 48) & (c <= 57) {
+            res = res * 10 + (c - 48);
+        }
+        i = i + 1;
+    }
+    return res;
+}
+
+fn http_parse_request(req: *HttpRequest, raw: str): i64 {
+    req.method = "GET";
+    req.path = "/";
+    req.query = "";
+    req.version = "HTTP/1.1";
+    req.content_length = 0;
+    req.content_type = "";
+    req.connection = "keep-alive";
+    req.body = "";
+    req.keep_alive = 1;
+    req.host = "";
+
+    let len = raw.len();
+    if len <= 0 { return -1; }
+
+    # 1. Parse request line: Method Path[?Query] Version
+    let i = 0;
+    while (i < len) & (raw[i] != (32 as u8)) & (raw[i] != (10 as u8)) {
+        i = i + 1;
+    }
+    req.method = string_slice(raw, 0, i);
+
+    while (i < len) & (raw[i] == (32 as u8)) { i = i + 1; }
+    let p_start = i;
+    while (i < len) & (raw[i] != (32 as u8)) & (raw[i] != (13 as u8)) & (raw[i] != (10 as u8)) {
+        i = i + 1;
+    }
+    let target = string_slice(raw, p_start, i - p_start);
+
+    let q_pos = string_index_of(target, "?");
+    if q_pos >= 0 {
+        req.path = string_slice(target, 0, q_pos);
+        req.query = string_slice(target, q_pos + 1, target.len() - (q_pos + 1));
+    } else {
+        req.path = target;
+        req.query = "";
+    }
+
+    # Normalize empty path to "/"
+    if req.path.len() == 0 {
+        req.path = "/";
+    }
+
+    while (i < len) & (raw[i] != (10 as u8)) { i = i + 1; }
+    if i < len { i = i + 1; }
+
+    # 2. Parse headers
+    while i < len {
+        # Check for empty line (end of headers)
+        if (raw[i] == (13 as u8)) & ((i + 1) < len) & (raw[i + 1] == (10 as u8)) {
+            i = i + 2;
+            if i < len {
+                req.body = string_slice(raw, i, len - i);
+            }
+            return 0;
+        }
+        if raw[i] == (10 as u8) {
+            i = i + 1;
+            if i < len {
+                req.body = string_slice(raw, i, len - i);
+            }
+            return 0;
+        }
+
+        let h_start = i;
+        while (i < len) & (raw[i] != (10 as u8)) { i = i + 1; }
+        let h_end = i;
+        if (h_end > h_start) & (raw[h_end - 1] == (13 as u8)) {
+            h_end = h_end - 1;
+        }
+        let line = string_slice(raw, h_start, h_end - h_start);
+        if i < len { i = i + 1; }
+
+        let colon = string_index_of(line, ":");
+        if colon > 0 {
+            let key = string_trim(string_slice(line, 0, colon));
+            let val = string_trim(string_slice(line, colon + 1, line.len() - (colon + 1)));
+
+            if (key == "Content-Length") | (key == "content-length") {
+                req.content_length = http_parse_int(val);
+            }
+            if (key == "Content-Type") | (key == "content-type") {
+                req.content_type = val;
+            }
+            if (key == "Connection") | (key == "connection") {
+                req.connection = val;
+                if (val == "close") | (val == "Close") {
+                    req.keep_alive = 0;
+                }
+            }
+            if (key == "Host") | (key == "host") {
+                req.host = val;
+            }
+        }
+    }
+    return 0;
+}
+
+fn http_make_response(
+    res: *HttpResponse,
+    status: i64,
+    content_type: str,
+    body: str
+): void {
+    res.status = status;
+    res.content_type = content_type;
+    res.body = body;
+    res.location = "";
+    res.keep_alive = 1;
+}
+
+fn http_response_init(
+    res: *HttpResponse,
+    status: i64,
+    content_type: str,
+    body: str
+): void {
+    http_make_response(res, status, content_type, body);
+}
+
+fn http_response_format(res: *HttpResponse): str {
+    let status_str = "200 OK";
+    if res.status == 200 { status_str = "200 OK"; }
+    if res.status == 201 { status_str = "201 Created"; }
+    if res.status == 204 { status_str = "204 No Content"; }
+    if res.status == 301 { status_str = "301 Moved Permanently"; }
+    if res.status == 302 { status_str = "302 Found"; }
+    if res.status == 304 { status_str = "304 Not Modified"; }
+    if res.status == 400 { status_str = "400 Bad Request"; }
+    if res.status == 401 { status_str = "401 Unauthorized"; }
+    if res.status == 403 { status_str = "403 Forbidden"; }
+    if res.status == 404 { status_str = "404 Not Found"; }
+    if res.status == 405 { status_str = "405 Method Not Allowed"; }
+    if res.status == 500 { status_str = "500 Internal Server Error"; }
+
+    let conn_str = if res.keep_alive == 1 { "keep-alive" } else { "close" };
+    let body_len = res.body.len();
+
+    let head = "HTTP/1.1 " + status_str + "\r\n";
+    head = head + "Content-Type: " + res.content_type + "\r\n";
+    head = head + "Content-Length: " + body_len + "\r\n";
+    head = head + "Connection: " + conn_str + "\r\n";
+    head = head + "Server: Webbix/1.0.0 (Rubix-Native x86-64)\r\n";
+    if res.location.len() > 0 {
+        head = head + "Location: " + res.location + "\r\n";
+    }
+    head = head + "\r\n";
+    return head + res.body;
+}

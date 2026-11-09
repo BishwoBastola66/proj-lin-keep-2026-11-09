@@ -1,0 +1,2 @@
+// The features directory contains all isolated feature modules.
+// Use `cubepod feature create <name>` to generate a new feature here.

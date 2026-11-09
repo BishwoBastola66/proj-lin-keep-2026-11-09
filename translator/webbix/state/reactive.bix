@@ -1,0 +1,66 @@
+# ==============================================================================
+# Webbix Framework — Reactive State Architecture (webbix/state/reactive.bix)
+# Pure Rubix implementation of observable state, mutation signals, dirty tracking,
+# multi-key storage, and change notification.
+# ==============================================================================
+
+struct WebbixStateStore {
+    store_id: i64,
+    count: i64,
+    change_count: i64,
+    is_dirty: i64,
+    keys: [i64; 16],
+    vals: [i64; 16]
+}
+
+fn webbix_state_init(store: *WebbixStateStore, store_id: i64): void {
+    store.store_id = store_id;
+    store.count = 0;
+    store.change_count = 0;
+    store.is_dirty = 0;
+    let i = 0;
+    while i < 16 {
+        store.keys[i] = -1;
+        store.vals[i] = 0;
+        i = i + 1;
+    }
+}
+
+fn webbix_state_set(store: *WebbixStateStore, key_id: i64, val: i64): void {
+    let slot = key_id & 15;
+    store.keys[slot] = key_id;
+    store.vals[slot] = val;
+    store.count = store.count + 1;
+    store.change_count = store.change_count + 1;
+    store.is_dirty = 1;
+}
+
+fn webbix_state_get(store: *WebbixStateStore, key_id: i64): i64 {
+    let slot = key_id & 15;
+    if store.keys[slot] == key_id {
+        return store.vals[slot];
+    }
+    return 0;
+}
+
+fn webbix_state_is_dirty(store: *WebbixStateStore): i64 {
+    return store.is_dirty;
+}
+
+fn webbix_state_clear_dirty(store: *WebbixStateStore): void {
+    store.is_dirty = 0;
+}
+
+fn webbix_state_increment(store: *WebbixStateStore, key_id: i64): i64 {
+    let cur = webbix_state_get(store, key_id);
+    let next_val = cur + 1;
+    webbix_state_set(store, key_id, next_val);
+    return next_val;
+}
+
+fn webbix_state_decrement(store: *WebbixStateStore, key_id: i64): i64 {
+    let cur = webbix_state_get(store, key_id);
+    let next_val = if cur > 0 { cur - 1 } else { 0 };
+    webbix_state_set(store, key_id, next_val);
+    return next_val;
+}

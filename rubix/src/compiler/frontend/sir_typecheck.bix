@@ -1,0 +1,63 @@
+# ==============================================================================
+# Rubix — Semantic Verification & Effect Checker (SIR Typechecker)
+# File: compiler/frontend/sir_typecheck.bix
+#
+# Enforces:
+#   1. Purity Confinement: Pure functions cannot invoke effectful operations.
+#   2. Capability Confinement: Privileged operations require explicit capability tokens.
+#   3. Affine Usage Rules: Single-ownership verification.
+# ==============================================================================
+
+let ERR_SIR_OK                      = 0;
+let ERR_SIR_PURITY_VIOLATION        = -101;
+let ERR_SIR_CAPABILITY_UNAUTHORIZED = -102;
+let ERR_SIR_TYPE_MISMATCH           = -103;
+
+# Verifies that function effects and capabilities adhere to the semantic model
+fn sir_verify_function(ast_buf: i64, fn_node: i64): i64 {
+    let declared_eff = sir_ast_effects(ast_buf, fn_node);
+    let held_caps = sir_ast_caps(ast_buf, fn_node);
+
+    # If function is declared pure, verify it possesses zero side effects
+    if declared_eff == EFFECT_PURE {
+        # Pure functions cannot hold system capabilities (they have zero external authority)
+        if held_caps != CAP_FLAG_NONE {
+            return ERR_SIR_PURITY_VIOLATION;
+        }
+    }
+
+    # If function requires syscalls or I/O, verify it holds corresponding capabilities
+    if (declared_eff & EFFECT_SYSCALL) != 0 {
+        if (held_caps & (CAP_FLAG_FS | CAP_FLAG_NET | CAP_FLAG_PROC)) == 0 {
+            # Syscall requires at least one system capability
+            return ERR_SIR_CAPABILITY_UNAUTHORIZED;
+        }
+    }
+
+    if (declared_eff & EFFECT_UNSAFE) != 0 {
+        if (held_caps & CAP_FLAG_UNSAFE) == 0 {
+            return ERR_SIR_CAPABILITY_UNAUTHORIZED;
+        }
+    }
+
+    return ERR_SIR_OK;
+}
+
+# Verifies all declarations in the SIR program
+fn sir_verify_program(ast_buf: i64, root_node: i64): i64 {
+    if root_node <= 0 { return ERR_SIR_OK; }
+
+    let curr = sir_ast_get_child(ast_buf, root_node, 0);
+    while curr > 0 {
+        let kind = sir_ast_kind(ast_buf, curr);
+        if kind == SIR_NODE_FN_DECL {
+            let res = sir_verify_function(ast_buf, curr);
+            if res != ERR_SIR_OK {
+                return res;
+            }
+        }
+        curr = sir_ast_get_child(ast_buf, curr, 0);
+    }
+
+    return ERR_SIR_OK;
+}

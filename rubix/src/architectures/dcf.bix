@@ -1,0 +1,91 @@
+# ==============================================================================
+# RUBIX DETERMINISTIC CONCURRENCY FABRIC (DCF / HARMONIC)
+# Pure Native Rubix Implementation: Lock-Free CRDT Join-Semilattices & Dual-Wave Sync
+# ==============================================================================
+
+# Distributed Conflict-Free Positive-Negative Counter (PNCounter)
+struct PNCounter {
+    pos_0: i64,
+    pos_1: i64,
+    neg_0: i64,
+    neg_1: i64
+}
+
+fn pn_new(): PNCounter {
+    let mut c: PNCounter;
+    c.pos_0 = 0;
+    c.pos_1 = 0;
+    c.neg_0 = 0;
+    c.neg_1 = 0;
+    return c;
+}
+
+fn pn_increment(c: *PNCounter, node_id: i64, delta: i64): i64 {
+    if node_id == 0 {
+        c.pos_0 = c.pos_0 + delta;
+    } else {
+        c.pos_1 = c.pos_1 + delta;
+    }
+    return 0;
+}
+
+fn pn_decrement(c: *PNCounter, node_id: i64, delta: i64): i64 {
+    if node_id == 0 {
+        c.neg_0 = c.neg_0 + delta;
+    } else {
+        c.neg_1 = c.neg_1 + delta;
+    }
+    return 0;
+}
+
+fn pn_value(c: PNCounter): i64 {
+    let pos = c.pos_0 + c.pos_1;
+    let neg = c.neg_0 + c.neg_1;
+    return pos - neg;
+}
+
+# Monotonic Join Operation (Least Upper Bound / LUB): Commutative, Associative, Idempotent
+fn pn_join(a: PNCounter, b: PNCounter): PNCounter {
+    let mut merged: PNCounter;
+    merged.pos_0 = if a.pos_0 > b.pos_0 { a.pos_0 } else { b.pos_0 };
+    merged.pos_1 = if a.pos_1 > b.pos_1 { a.pos_1 } else { b.pos_1 };
+    merged.neg_0 = if a.neg_0 > b.neg_0 { a.neg_0 } else { b.neg_0 };
+    merged.neg_1 = if a.neg_1 > b.neg_1 { a.neg_1 } else { b.neg_1 };
+    return merged;
+}
+
+# Seismological Dual-Wave Synchronization Engine
+struct DualWaveSync {
+    node_id: i64,
+    lamport_clock: i64,
+    p_waves_emitted: i64,
+    s_waves_converged: i64
+}
+
+fn dual_wave_new(node_id: i64): DualWaveSync {
+    let mut dw: DualWaveSync;
+    dw.node_id = node_id;
+    dw.lamport_clock = 0;
+    dw.p_waves_emitted = 0;
+    dw.s_waves_converged = 0;
+    return dw;
+}
+
+# Emits Primary P-Wave instantaneous causal marker (<10 µs)
+fn emit_p_wave(dw: *DualWaveSync): i64 {
+    dw.lamport_clock = dw.lamport_clock + 1;
+    dw.p_waves_emitted = dw.p_waves_emitted + 1;
+    # 64-bit causal timestamp
+    let marker = (dw.lamport_clock * 1000) + dw.node_id;
+    return marker;
+}
+
+# Ingests Secondary S-Wave bulk state convergence
+fn ingest_s_wave(dw: *DualWaveSync, remote_marker: i64): i64 {
+    let remote_clock = remote_marker / 1000;
+    if remote_clock > dw.lamport_clock {
+        dw.lamport_clock = remote_clock;
+    }
+    dw.s_waves_converged = dw.s_waves_converged + 1;
+    return dw.lamport_clock;
+}

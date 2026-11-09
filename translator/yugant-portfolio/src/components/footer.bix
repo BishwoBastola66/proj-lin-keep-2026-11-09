@@ -1,0 +1,9 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — Semantic Footer (components/footer.bix)
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+
+fn render_footer(app: *App): void {
+    Footer(app, "© 2026 Yugant Xettri. Architected natively with Webbix & Rubix.");
+}

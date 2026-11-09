@@ -1,0 +1,54 @@
+# ==============================================================================
+# Rubix — Algebraic Effect System
+# File: compiler/common/effects.bix
+#
+# Compile-Time Effect Lattice:
+#   EFFECT_PURE     (0)  - Pure computation with zero external side effects
+#   EFFECT_READ     (1)  - Reads external/heap memory
+#   EFFECT_WRITE    (2)  - Mutates external/heap memory
+#   EFFECT_ALLOC    (4)  - Allocates heap memory
+#   EFFECT_IO       (8)  - Console/Standard I/O
+#   EFFECT_SYSCALL  (16) - Operating system kernel syscall
+#   EFFECT_NET      (32) - Network socket traffic
+#   EFFECT_UNSAFE   (64) - Unchecked raw memory or FFI call
+# ==============================================================================
+
+let EFFECT_PURE    = 0;
+let EFFECT_READ    = 1;
+let EFFECT_WRITE   = 2;
+let EFFECT_ALLOC   = 4;
+let EFFECT_IO      = 8;
+let EFFECT_SYSCALL = 16;
+let EFFECT_NET     = 32;
+let EFFECT_UNSAFE  = 64;
+
+fn effect_is_pure(mask: i64): i64 {
+    if mask == EFFECT_PURE {
+        return 1;
+    }
+    return 0;
+}
+
+fn effect_join(e1: i64, e2: i64): i64 {
+    return e1 | e2;
+}
+
+fn effect_satisfies(actual_eff: i64, declared_eff: i64): i64 {
+    # If declared is pure, actual must be exactly pure
+    if declared_eff == EFFECT_PURE {
+        if actual_eff == EFFECT_PURE { return 1; }
+        return 0;
+    }
+    # Otherwise, actual effects must be a subset of declared effects
+    if (actual_eff & (~declared_eff)) == 0 {
+        return 1;
+    }
+    return 0;
+}
+
+fn effect_violates_purity(eff: i64): i64 {
+    if eff != EFFECT_PURE {
+        return 1;
+    }
+    return 0;
+}

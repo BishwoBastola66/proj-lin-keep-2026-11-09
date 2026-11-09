@@ -1,0 +1,31 @@
+{
+  "name": "yugant-portfolio",
+  "version": "1.0.0",
+  "description": "Yugant Xettri — Systems Architect & Compiler Engineer Portfolio built natively with Webbix & Rubix.",
+  "framework": "webbix",
+  "main": "src/App.bix",
+  "entry": "src/App.bix",
+  "port": 8080,
+  "server": {
+    "port": 8080,
+    "host": "127.0.0.1"
+  },
+  "build": {
+    "target": "native",
+    "outDir": "mist",
+    "cacheDir": "cache"
+  },
+  "scripts": {
+    "serve": "rix serve",
+    "start": "rix run",
+    "build": "rix build",
+    "test": "rix test tests"
+  },
+  "theme": "dark",
+  "routes": [
+    { "path": "/", "title": "Home" },
+    { "path": "/projects", "title": "Projects" },
+    { "path": "/about", "title": "About" },
+    { "path": "/contact", "title": "Contact" }
+  ]
+}

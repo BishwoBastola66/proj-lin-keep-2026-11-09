@@ -1,0 +1,1 @@
+/usr/bin/cc -fsanitize=address,undefined -g -Wall -Wextra -Wpedantic -Wno-unused-parameter -Werror=vla -Werror=implicit-function-declaration -g -Wl,--dependency-file=CMakeFiles/test_utils.dir/link.d CMakeFiles/test_utils.dir/test_utils.c.o CMakeFiles/test_utils.dir/__/src/utils/logger.c.o CMakeFiles/test_utils.dir/__/src/utils/timer.c.o -o test_utils  -lm

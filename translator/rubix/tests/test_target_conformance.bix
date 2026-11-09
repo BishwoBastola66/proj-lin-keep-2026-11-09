@@ -1,0 +1,57 @@
+
+fn fib(n: i64): i64 {
+    if n <= 1 { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+
+fn sum_range(curr: i64, max: i64, acc: i64): i64 {
+    if curr > max { return acc; }
+    return sum_range(curr + 1, max, acc + curr);
+}
+
+fn gcd(a: i64, b: i64): i64 {
+    if b == 0 { return a; }
+    return gcd(b, a % b);
+}
+
+fn collatz_steps(n: i64): i64 {
+    let steps = 0;
+    let v = n;
+    while v > 1 {
+        if (v % 2) == 0 {
+            v = v / 2;
+        } else {
+            v = (v * 3) + 1;
+        }
+        steps = steps + 1;
+    }
+    return steps;
+}
+
+fn test_abi_args(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64): i64 {
+    return a1 + a2 + a3 + a4 + a5 + a6;
+}
+
+fn main(): i64 {
+    let f10 = fib(10);
+    if f10 != 55 { return 1; }
+
+    let s100 = sum_range(1, 100, 0);
+    if s100 != 5050 { return 2; }
+
+    let g = gcd(48, 18);
+    if g != 6 { return 3; }
+
+    let arg_sum = test_abi_args(10, 20, 30, 40, 50, 60);
+    if arg_sum != 210 { return 4; }
+
+    let c27 = collatz_steps(27);
+    if c27 != 111 { return 5; }
+
+    print(f10);
+    print(s100);
+    print(g);
+    print(arg_sum);
+    print(c27);
+    return 0;
+}

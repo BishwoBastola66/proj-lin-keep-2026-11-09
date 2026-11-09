@@ -1,0 +1,84 @@
+{
+    "$schema": "https://rubix.dev/schemas/theme/1",
+    "name": "rubix-white",
+    "mode": "light",
+    "description": "Single source of truth for the Rubix Library registry theme. Light, calm, high-contrast, accessible. Every UI component MUST consume these tokens and MUST NOT hardcode colors.",
+    "color": {
+        "bg": "#FFFFFF",
+        "surface": "#FFFFFF",
+        "surface-alt": "#F7F8FA",
+        "surface-hover": "#F2F4F7",
+        "border": "#E6E8EC",
+        "border-strong": "#D0D5DD",
+        "text": "#101828",
+        "text-muted": "#475467",
+        "text-subtle": "#98A2B3",
+        "accent": "#2563EB",
+        "accent-hover": "#1D4ED8",
+        "accent-weak": "#EFF4FF",
+        "accent-contrast": "#FFFFFF",
+        "success": "#12B76A",
+        "success-weak": "#ECFDF3",
+        "warn": "#F79009",
+        "warn-weak": "#FFFAEB",
+        "danger": "#F04438",
+        "danger-weak": "#FEF3F2",
+        "focus-ring": "#2563EB"
+    },
+    "radius": {
+        "sm": "6px",
+        "md": "10px",
+        "lg": "12px",
+        "xl": "16px",
+        "pill": "9999px"
+    },
+    "shadow": {
+        "sm": "0 1px 2px rgba(16, 24, 40, 0.06)",
+        "md": "0 4px 8px -2px rgba(16, 24, 40, 0.08)",
+        "lg": "0 12px 24px -6px rgba(16, 24, 40, 0.10)"
+    },
+    "typography": {
+        "font-sans": "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+        "font-mono": "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace",
+        "size": {
+            "xs": "12px",
+            "sm": "13px",
+            "md": "15px",
+            "lg": "18px",
+            "xl": "24px",
+            "2xl": "32px",
+            "3xl": "44px"
+        },
+        "weight": {
+            "regular": 400,
+            "medium": 500,
+            "semibold": 600
+        },
+        "line-height": {
+            "tight": 1.2,
+            "normal": 1.5,
+            "loose": 1.7
+        }
+    },
+    "space": {
+        "1": "4px",
+        "2": "8px",
+        "3": "12px",
+        "4": "16px",
+        "5": "20px",
+        "6": "24px",
+        "8": "32px",
+        "10": "40px",
+        "12": "48px",
+        "16": "64px"
+    },
+    "rules": [
+        "White-first: page background is always #FFFFFF or #F7F8FA.",
+        "Exactly ONE accent color per page (#2563EB). No gradients on text.",
+        "Minimum AA contrast (4.5:1 body, 3:1 large text).",
+        "Icons are monochrome; status color comes from tokens only.",
+        "No dark chrome anywhere in the registry.",
+        "Focus is always visible via focus-ring, 2px offset.",
+        "Motion: 120-200ms ease-out only; respect prefers-reduced-motion."
+    ]
+}

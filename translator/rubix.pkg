@@ -1,0 +1,9 @@
+package "translator" {
+    version "0.1.0"
+    edition "2026"
+    entry "src/main.bix"
+    license "MIT"
+    category "tools"
+    dep "collections-cli": "^1.0.0"
+    targets ["native"]
+}

@@ -1,0 +1,167 @@
+# ==============================================================================
+# Webbix Framework — HTTP Server Engine (webbix/server/server.bix)
+# Pure Rubix HTTP server coordinating sockets, dispatching, and response generation.
+# ==============================================================================
+
+include "webbix/net/socket.bix";
+include "webbix/server/http.bix";
+
+struct WebbixServer {
+    port: i64,
+    is_active: i64,
+    requests_served: i64,
+    scratch_buf: i64,
+    socket: WebbixSocket,
+    disp: PlatformDispatcher
+}
+
+fn webbix_server_init(server: *WebbixServer, port: i64): i64 {
+    server.port = port;
+    server.is_active = 0;
+    server.requests_served = 0;
+
+    # 1. Allocate 64KB scratch buffer for request/response serialization
+    let sbuf = sys_mmap(0, 65536, 3, 34, -1, 0);
+    if sbuf <= 0 { return -1; }
+    server.scratch_buf = sbuf;
+
+    # 2. Initialize platform syscall trampoline
+    let p_res = webbix_platform_init(&server.disp);
+    if p_res < 0 { return -2; }
+
+    # 3. Create TCP socket
+    let s_res = webbix_socket_create(&server.socket, &server.disp, AF_INET, SOCK_STREAM, 0);
+    if s_res < 0 { return -3; }
+
+    # 4. Set SO_REUSEADDR
+    webbix_socket_set_reuseaddr(&server.socket, &server.disp);
+
+    # 5. Bind socket to port
+    let b_res = webbix_socket_bind(&server.socket, &server.disp, port);
+    if b_res < 0 {
+        webbix_socket_close(&server.socket);
+        return -4;
+    }
+
+    # 6. Listen for incoming connections
+    let l_res = webbix_socket_listen(&server.socket, &server.disp, 128);
+    if l_res < 0 {
+        webbix_socket_close(&server.socket);
+        return -5;
+    }
+
+    server.is_active = 1;
+    return 0;
+}
+
+fn webbix_server_send_response(
+    server: *WebbixServer,
+    client_fd: i64,
+    status: i64,
+    body: str
+): i64 {
+    if client_fd < 0 { return -1; }
+    let sbuf = server.scratch_buf;
+    let p = 0;
+
+    # Write HTTP status line and headers
+    if status == WEBMIX_HTTP_OK {
+        let hdr = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n";
+        let hlen = hdr.len();
+        let i = 0;
+        while i < hlen {
+            set_byte(sbuf, p + i, hdr[i]);
+            i = i + 1;
+        }
+        p = p + hlen;
+    } else {
+        let hdr = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n";
+        let hlen = hdr.len();
+        let i = 0;
+        while i < hlen {
+            set_byte(sbuf, p + i, hdr[i]);
+            i = i + 1;
+        }
+        p = p + hlen;
+    }
+
+    # Append response body
+    let blen = body.len();
+    let j = 0;
+    while j < blen {
+        set_byte(sbuf, p + j, body[j]);
+        j = j + 1;
+    }
+    p = p + blen;
+
+    # Send full HTTP response to client fd
+    let bytes_sent = sys_write(client_fd, sbuf, p);
+    sys_close(client_fd);
+    return bytes_sent;
+}
+
+fn webbix_server_serve_once(
+    server: *WebbixServer,
+    body_html: str
+): i64 {
+    if server.is_active == 0 { return -1; }
+    let client_fd = webbix_socket_accept(&server.socket, &server.disp);
+    if client_fd < 0 { return client_fd; }
+
+    # Read incoming request header into scratch buffer
+    let req_bytes = sys_read(client_fd, server.scratch_buf, 2048);
+
+    # Increment request counter
+    server.requests_served = server.requests_served + 1;
+
+    # Send HTTP 200 response with HTML
+    return webbix_server_send_response(server, client_fd, WEBMIX_HTTP_OK, body_html);
+}
+
+fn webbix_server_send_buffer(
+    server: *WebbixServer,
+    client_fd: i64,
+    status: i64,
+    buf: i64,
+    len: i64
+): i64 {
+    if client_fd < 0 { return -1; }
+    let sbuf = server.scratch_buf;
+    let hdr = if status == WEBMIX_HTTP_OK {
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\n"
+    } else {
+        "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\n"
+    };
+    let hlen = hdr.len();
+    let i = 0;
+    while i < hlen {
+        set_byte(sbuf, i, hdr[i]);
+        i = i + 1;
+    }
+    sys_write(client_fd, sbuf, hlen);
+    let bytes_sent = sys_write(client_fd, buf, len);
+    sys_close(client_fd);
+    return bytes_sent;
+}
+
+fn webbix_server_serve_buffer(
+    server: *WebbixServer,
+    buf: i64,
+    len: i64
+): i64 {
+    if server.is_active == 0 { return -1; }
+    let client_fd = webbix_socket_accept(&server.socket, &server.disp);
+    if client_fd < 0 { return client_fd; }
+
+    sys_read(client_fd, server.scratch_buf, 2048);
+    server.requests_served = server.requests_served + 1;
+    return webbix_server_send_buffer(server, client_fd, WEBMIX_HTTP_OK, buf, len);
+}
+
+fn webbix_server_close(server: *WebbixServer): void {
+    if server.is_active == 1 {
+        webbix_socket_close(&server.socket);
+        webbix_platform_destroy(&server.disp);
+        server.is_active = 0;
+    }
+}

@@ -1,0 +1,8 @@
+name = "rubix-rate-limiter"
+main = "index.js"
+compatibility_date = "2024-09-01"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "00000000000000000000000000000003"
+preview_id = "00000000000000000000000000000004"

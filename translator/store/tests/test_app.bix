@@ -1,0 +1,32 @@
+# ==============================================================================
+# Application Verification Test Battery (tests/test_app.bix)
+# ==============================================================================
+
+include "../App.bix";
+
+fn main(): i64 {
+    let app = app_create();
+
+    # Verify Web IR construction
+    if app.web_app.node_count <= 10 { return 1; }
+    if StateGet(app, "views") != 1250 { return 2; }
+    if StateGet(app, "stars") != 420 { return 3; }
+
+    # Find button and simulate click
+    let btn_id = -1;
+    let i = 0;
+    while i < app.web_app.node_count {
+        if (app.web_app.nodes[i].kind == WebKind.Button) & (app.web_app.nodes[i].event.event_kind == WebEventKind.Click) {
+            btn_id = app.web_app.nodes[i].id;
+        }
+        i = i + 1;
+    }
+    if btn_id < 0 { return 4; }
+
+    # Dispatch interactive click: state increments 420 -> 421
+    DispatchClick(app, btn_id);
+    if StateGet(app, "stars") != 421 { return 5; }
+
+    # All tests passed: return 42
+    return Build(app);
+}

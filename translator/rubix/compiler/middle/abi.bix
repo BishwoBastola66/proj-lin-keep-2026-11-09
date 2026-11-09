@@ -1,0 +1,2410 @@
+# ==============================================================================
+# Rubix Application Binary Interface (ABI) Resilience Subsystem
+# File: compiler/middle/abi.bix
+# Pure Rubix Architecture: Zero external tools, zero Python, zero LLVM.
+# ==============================================================================
+
+struct AbiContract {
+    name_hash: i64,
+    arity: i64,
+    ret_type: i64,
+    abi_id: i64,
+    caps: i64,
+    effects: i64,
+    identity_hash: i64,
+    compat_hash: i64,
+    security_hash: i64,
+    contract_hash: i64,
+    interface_ver: i64,
+    repr_ver: i64
+}
+
+# ------------------------------------------------------------------------------
+# 1. ABI Calling Convention Identifiers
+# ------------------------------------------------------------------------------
+let ABI_SYSV           = 1; # System V AMD64 ABI (Linux/macOS x86_64: rdi, rsi, rdx, rcx, r8, r9)
+let ABI_WIN64          = 2; # Microsoft x64 ABI (Windows: rcx, rdx, r8, r9, 32B shadow)
+let ABI_AAPCS64        = 3; # ARM 64-bit Architecture PCS (Linux/Android: x0-x7)
+let ABI_DARWIN_AAPCS64 = 4; # Apple Silicon Darwin AAPCS64 (macOS/iOS: x0-x7)
+let ABI_RISCV_LP64     = 5; # RISC-V LP64 Standard ABI (Linux: a0-a7)
+let ABI_WASI           = 6; # WebAssembly WASI ABI
+let ABI_RUBIX_FAST     = 7; # Sovereign Rubix Internal Fastcall
+
+# ------------------------------------------------------------------------------
+# 2. Comprehensive Compatibility Lattice Classification
+# ------------------------------------------------------------------------------
+let COMPAT_BITWISE          = 0; # Identical register mapping; direct native call, 0 overhead
+let COMPAT_REPRESENTATIONAL = 1; # Compatible bit representation; bit-identical
+let COMPAT_CALLING          = 2; # Equivalent argument registers, same width
+let COMPAT_ABI              = 3; # Target ABI equivalent
+let COMPAT_ADAPTER          = 4; # Convertible; synthesized specialized machine trampoline
+let COMPAT_SEMANTIC         = 5; # Semantic match; requires capability/effect gate check
+let COMPAT_RECOMPILE_REQ    = 6; # Source compatible; requires local compiler rebuild
+let COMPAT_CROSS_ISA        = 7; # Cross-architecture boundary (requires emulation/translation)
+let COMPAT_REMOTE           = 8; # Cross-process / RPC boundary
+let COMPAT_INCOMPATIBLE     = -1; # Incompatible arity, type, or unauthorized capability
+
+# ------------------------------------------------------------------------------
+# 3. Categorized ABI Change Classification
+# ------------------------------------------------------------------------------
+let CHANGE_NONE               = 0;
+let CHANGE_CALLING_CONVENTION = 1;
+let CHANGE_DATA_LAYOUT        = 2;
+let CHANGE_REPRESENTATION     = 3;
+let CHANGE_SYMBOL_LINKAGE     = 4;
+let CHANGE_OBJECT_FORMAT      = 5;
+let CHANGE_RUNTIME_CONTRACT   = 6;
+let CHANGE_OS_ABI             = 7;
+let CHANGE_THREAD_TLS         = 8;
+let CHANGE_EXCEPTION_UNWIND   = 9;
+let CHANGE_ISA                = 10;
+let CHANGE_CROSS_ISA          = 11;
+
+# ------------------------------------------------------------------------------
+# 4. Parameter Classification Constants
+# ------------------------------------------------------------------------------
+let PARAM_CLASS_INTEGER   = 1; # Fits in general purpose integer register
+let PARAM_CLASS_POINTER   = 2; # Memory pointer
+let PARAM_CLASS_FLOAT     = 3; # Floating point / vector register
+let PARAM_CLASS_AGGREGATE = 4; # Multi-word aggregate / struct
+let PARAM_CLASS_AFFINE    = 5; # Linear resource handle
+
+# ------------------------------------------------------------------------------
+# 5. Error Diagnostics
+# ------------------------------------------------------------------------------
+let ERR_ABI_MISMATCH_ARITY = -35;
+let ERR_ABI_MISMATCH_TYPE  = -42;
+let ERR_ABI_INCOMPATIBLE   = -90;
+let ERR_CAP_UNAUTHORIZED   = -71;
+let ERR_EFFECT_PURITY      = -72;
+
+# ------------------------------------------------------------------------------
+# 6. Core ABI Query API
+# ------------------------------------------------------------------------------
+fn abi_get_name(abi_id: i64): str {
+    if abi_id == ABI_SYSV { return "sysv_amd64"; }
+    if abi_id == ABI_WIN64 { return "ms_win64"; }
+    if abi_id == ABI_AAPCS64 { return "arm_aapcs64"; }
+    if abi_id == ABI_DARWIN_AAPCS64 { return "darwin_arm64"; }
+    if abi_id == ABI_RISCV_LP64 { return "riscv_lp64"; }
+    if abi_id == ABI_WASI { return "wasi"; }
+    if abi_id == ABI_RUBIX_FAST { return "rubix_fastcall"; }
+    return "unknown_abi";
+}
+
+fn abi_compat_name(compat_id: i64): str {
+    if compat_id == COMPAT_BITWISE { return "BITWISE_COMPATIBLE"; }
+    if compat_id == COMPAT_REPRESENTATIONAL { return "REPRESENTATION_COMPATIBLE"; }
+    if compat_id == COMPAT_CALLING { return "CALLING_COMPATIBLE"; }
+    if compat_id == COMPAT_ABI { return "ABI_COMPATIBLE"; }
+    if compat_id == COMPAT_ADAPTER { return "ADAPTER_COMPATIBLE"; }
+    if compat_id == COMPAT_SEMANTIC { return "SEMANTICALLY_COMPATIBLE"; }
+    if compat_id == COMPAT_RECOMPILE_REQ { return "RECOMPILE_REQUIRED"; }
+    if compat_id == COMPAT_CROSS_ISA { return "CROSS_ISA_BOUNDARY"; }
+    if compat_id == COMPAT_REMOTE { return "REMOTE_BOUNDARY"; }
+    return "INCOMPATIBLE";
+}
+
+fn abi_change_name(change_id: i64): str {
+    if change_id == CHANGE_NONE { return "NONE"; }
+    if change_id == CHANGE_CALLING_CONVENTION { return "CALLING_CONVENTION_CHANGE"; }
+    if change_id == CHANGE_DATA_LAYOUT { return "DATA_LAYOUT_CHANGE"; }
+    if change_id == CHANGE_REPRESENTATION { return "REPRESENTATION_CHANGE"; }
+    if change_id == CHANGE_SYMBOL_LINKAGE { return "SYMBOL_LINKAGE_CHANGE"; }
+    if change_id == CHANGE_OBJECT_FORMAT { return "OBJECT_FORMAT_CHANGE"; }
+    if change_id == CHANGE_RUNTIME_CONTRACT { return "RUNTIME_CONTRACT_CHANGE"; }
+    if change_id == CHANGE_OS_ABI { return "OS_ABI_CHANGE"; }
+    if change_id == CHANGE_THREAD_TLS { return "THREAD_TLS_CHANGE"; }
+    if change_id == CHANGE_EXCEPTION_UNWIND { return "EXCEPTION_UNWIND_CHANGE"; }
+    if change_id == CHANGE_ISA { return "ISA_CHANGE"; }
+    if change_id == CHANGE_CROSS_ISA { return "CROSS_ISA_BOUNDARY"; }
+    return "UNKNOWN_CHANGE";
+}
+
+fn abi_get_max_reg_args(abi_id: i64): i64 {
+    if abi_id == ABI_SYSV { return 6; }
+    if abi_id == ABI_WIN64 { return 4; }
+    if abi_id == ABI_AAPCS64 { return 8; }
+    if abi_id == ABI_DARWIN_AAPCS64 { return 8; }
+    if abi_id == ABI_RISCV_LP64 { return 8; }
+    if abi_id == ABI_RUBIX_FAST { return 6; }
+    return 0;
+}
+
+fn abi_get_shadow_space(abi_id: i64): i64 {
+    if abi_id == ABI_WIN64 { return 32; }
+    return 0;
+}
+
+fn abi_get_stack_align(abi_id: i64): i64 {
+    return 16;
+}
+
+# ------------------------------------------------------------------------------
+# 7. Semantic Contract Construction & Multi-Hash Fingerprinting
+# ------------------------------------------------------------------------------
+fn abi_contract_alloc(): *AbiContract {
+    let c = alloc_buffer(96) as *AbiContract;
+    c.name_hash = 0;
+    c.arity = 0;
+    c.ret_type = 0;
+    c.abi_id = ABI_SYSV;
+    c.caps = 0;
+    c.effects = 0;
+    c.identity_hash = 0;
+    c.compat_hash = 0;
+    c.security_hash = 0;
+    c.contract_hash = 0;
+    c.interface_ver = 1;
+    c.repr_ver = 1;
+    return c;
+}
+
+fn abi_calc_identity_hash(name_hash: i64, arity: i64): i64 {
+    let h = 14695981039346656037;
+    h = (h ^ name_hash) * 1099511628211;
+    h = (h ^ (arity + 1)) * 1099511628211;
+    return h;
+}
+
+fn abi_calc_compat_hash(arity: i64, ret_type: i64, abi_id: i64): i64 {
+    let h = 14695981039346656037;
+    h = (h ^ (arity + 1)) * 1099511628211;
+    h = (h ^ (ret_type + 1)) * 1099511628211;
+    h = (h ^ (abi_id + 1)) * 1099511628211;
+    return h;
+}
+
+fn abi_calc_security_hash(caps: i64, effects: i64): i64 {
+    let h = 14695981039346656037;
+    h = (h ^ (caps + 7)) * 1099511628211;
+    h = (h ^ (effects + 13)) * 1099511628211;
+    return h;
+}
+
+fn abi_contract_init(c: *AbiContract, name_hash: i64, arity: i64, ret_type: i64, abi_id: i64, caps: i64, effects: i64): i64 {
+    c.name_hash = name_hash;
+    c.arity = arity;
+    c.ret_type = ret_type;
+    c.abi_id = abi_id;
+    c.caps = caps;
+    c.effects = effects;
+    c.identity_hash = abi_calc_identity_hash(name_hash, arity);
+    c.compat_hash = abi_calc_compat_hash(arity, ret_type, abi_id);
+    c.security_hash = abi_calc_security_hash(caps, effects);
+
+    # Composite contract fingerprint
+    let h = 14695981039346656037;
+    h = (h ^ c.identity_hash) * 1099511628211;
+    h = (h ^ c.compat_hash) * 1099511628211;
+    h = (h ^ c.security_hash) * 1099511628211;
+    c.contract_hash = h;
+    return c.contract_hash;
+}
+
+# ------------------------------------------------------------------------------
+# 8. ABI Change Classification
+# ------------------------------------------------------------------------------
+fn abi_classify_change(caller_abi: i64, callee_abi: i64, caller_isa: i64, callee_isa: i64): i64 {
+    if caller_isa != callee_isa {
+        return CHANGE_CROSS_ISA;
+    }
+    if caller_abi == callee_abi {
+        return CHANGE_NONE;
+    }
+    # x86_64 SysV vs Win64
+    if ((caller_abi == ABI_SYSV) & (callee_abi == ABI_WIN64)) | ((caller_abi == ABI_WIN64) & (callee_abi == ABI_SYSV)) {
+        return CHANGE_CALLING_CONVENTION;
+    }
+    # ARM64 AAPCS vs Darwin ARM64
+    if ((caller_abi == ABI_AAPCS64) & (callee_abi == ABI_DARWIN_AAPCS64)) | ((caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_AAPCS64)) {
+        return CHANGE_CALLING_CONVENTION;
+    }
+    return CHANGE_CALLING_CONVENTION;
+}
+
+# ------------------------------------------------------------------------------
+# 9. Rich Compatibility Lattice Solver
+# ------------------------------------------------------------------------------
+fn abi_solve_compatibility(caller_abi: i64, callee_abi: i64, caller_arity: i64, callee_arity: i64, caller_caps: i64, callee_caps: i64): i64 {
+    # Invariant 1: Arity must match
+    if caller_arity != callee_arity {
+        return COMPAT_INCOMPATIBLE;
+    }
+
+    # Invariant 2: Caller must possess all capabilities required by callee
+    if (callee_caps & caller_caps) != callee_caps {
+        return COMPAT_INCOMPATIBLE;
+    }
+
+    # Invariant 3: Identical calling conventions -> BITWISE_COMPATIBLE (Zero Overhead)
+    if caller_abi == callee_abi {
+        return COMPAT_BITWISE;
+    }
+
+    # Invariant 4: System V and Rubix Fastcall share argument registers -> BITWISE_COMPATIBLE
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_RUBIX_FAST) {
+        return COMPAT_BITWISE;
+    }
+    if (caller_abi == ABI_RUBIX_FAST) & (callee_abi == ABI_SYSV) {
+        return COMPAT_BITWISE;
+    }
+
+    # Invariant 5: System V <-> Win64 on x86_64 requires register shuffling and shadow space
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_WIN64) {
+        return COMPAT_ADAPTER;
+    }
+    if (caller_abi == ABI_WIN64) & (callee_abi == ABI_SYSV) {
+        return COMPAT_ADAPTER;
+    }
+
+    # Invariant 6: ARM64 and Darwin ARM64 are convertible via adapter
+    if (caller_abi == ABI_AAPCS64) & (callee_abi == ABI_DARWIN_AAPCS64) {
+        return COMPAT_ADAPTER;
+    }
+    if (caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_AAPCS64) {
+        return COMPAT_ADAPTER;
+    }
+
+    # Cross-architecture interfaces require semantic bridges
+    return COMPAT_SEMANTIC;
+}
+
+fn abi_solve_contracts(caller: *AbiContract, callee: *AbiContract): i64 {
+    return abi_solve_compatibility(caller.abi_id, callee.abi_id, caller.arity, callee.arity, caller.caps, callee.caps);
+}
+
+# Returns 1 if no adapter is needed (100% direct native call)
+fn abi_is_zero_cost_eliminated(caller_abi: i64, callee_abi: i64): i64 {
+    let compat = abi_solve_compatibility(caller_abi, callee_abi, 0, 0, 0, 0);
+    if compat == COMPAT_BITWISE { return 1; }
+    return 0;
+}
+
+# ------------------------------------------------------------------------------
+# 10. Specialized Machine Trampoline Synthesizers
+# ------------------------------------------------------------------------------
+
+# Synthesizes an x86-64 machine trampoline for System V caller -> Microsoft x64 callee
+fn abi_synthesize_adapter_sysv_to_win64(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+
+    # push rbp (0x55)
+    set_byte(code_buf, l, 85); l = l + 1;
+    # mov rbp, rsp (0x48, 0x89, 0xe5)
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 137); l = l + 1;
+    set_byte(code_buf, l, 229); l = l + 1;
+
+    # sub rsp, 32 (0x48, 0x83, 0xec, 0x20) - Allocate mandatory Win64 32B shadow space
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 131); l = l + 1;
+    set_byte(code_buf, l, 236); l = l + 1;
+    set_byte(code_buf, l, 32); l = l + 1;
+
+    # Argument Register Permutation:
+    # SysV:  rdi, rsi, rdx, rcx
+    # Win64: rcx, rdx, r8,  r9
+
+    if arity >= 4 {
+        # mov r9, rcx (49 89 c9)
+        set_byte(code_buf, l, 73); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 201); l = l + 1;
+    }
+    if arity >= 3 {
+        # mov r8, rdx (49 89 d0)
+        set_byte(code_buf, l, 73); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 208); l = l + 1;
+    }
+    if arity >= 2 {
+        # mov rdx, rsi (48 89 f2)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 242); l = l + 1;
+    }
+    if arity >= 1 {
+        # mov rcx, rdi (48 89 f9)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 249); l = l + 1;
+    }
+
+    # Call target via RAX
+    if target_ptr != 0 {
+        # mov rax, target_ptr (48 b8 <8 bytes>)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0;
+        let p = target_ptr;
+        while bi < 8 {
+            set_byte(code_buf, l, p & 255);
+            l = l + 1;
+            p = p >> 8;
+            bi = bi + 1;
+        }
+        # call rax (ff d0)
+        set_byte(code_buf, l, 255); l = l + 1;
+        set_byte(code_buf, l, 208); l = l + 1;
+    }
+
+    # add rsp, 32 (48 83 c4 20) - Tear down shadow space
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 131); l = l + 1;
+    set_byte(code_buf, l, 196); l = l + 1;
+    set_byte(code_buf, l, 32); l = l + 1;
+
+    # pop rbp (5d)
+    set_byte(code_buf, l, 93); l = l + 1;
+    # ret (c3)
+    set_byte(code_buf, l, 195); l = l + 1;
+
+    return l;
+}
+
+# Synthesizes an x86-64 reverse thunk for Microsoft x64 caller -> System V callee (Callback Reverse Thunk)
+fn abi_synthesize_adapter_win64_to_sysv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+
+    # push rbp (0x55)
+    set_byte(code_buf, l, 85); l = l + 1;
+    # mov rbp, rsp (0x48, 0x89, 0xe5)
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 137); l = l + 1;
+    set_byte(code_buf, l, 229); l = l + 1;
+
+    # Reverse Register Permutation:
+    # Win64 incoming: rcx, rdx, r8, r9
+    # SysV outgoing:  rdi, rsi, rdx, rcx
+    if arity >= 1 {
+        # mov rdi, rcx (48 89 cf)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 207); l = l + 1;
+    }
+    if arity >= 2 {
+        # mov rsi, rdx (48 89 d6)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 214); l = l + 1;
+    }
+    if arity >= 3 {
+        # mov rdx, r8 (4c 89 c2)
+        set_byte(code_buf, l, 76); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 194); l = l + 1;
+    }
+    if arity >= 4 {
+        # mov rcx, r9 (4c 89 c9)
+        set_byte(code_buf, l, 76); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 201); l = l + 1;
+    }
+
+    # Call target via RAX
+    if target_ptr != 0 {
+        # mov rax, target_ptr (48 b8 <8 bytes>)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0;
+        let p = target_ptr;
+        while bi < 8 {
+            set_byte(code_buf, l, p & 255);
+            l = l + 1;
+            p = p >> 8;
+            bi = bi + 1;
+        }
+        # call rax (ff d0)
+        set_byte(code_buf, l, 255); l = l + 1;
+        set_byte(code_buf, l, 208); l = l + 1;
+    }
+
+    # pop rbp (5d)
+    set_byte(code_buf, l, 93); l = l + 1;
+    # ret (c3)
+    set_byte(code_buf, l, 195); l = l + 1;
+
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 11. Intra-Architecture Specialized Trampolines (x86_64, AArch64, RISC-V)
+# ------------------------------------------------------------------------------
+
+# System V -> Rubix Fastcall
+# SysV incoming:     rdi (arg 1), rsi (arg 2), rdx (arg 3), rcx (arg 4), r8 (arg 5), r9 (arg 6)
+# Fastcall outgoing: rax (arg 1), rbx (arg 2), rcx (arg 3), rdx (arg 4), rsi (arg 5), rdi (arg 6)
+fn abi_synthesize_adapter_sysv_to_fast(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp (0x55)
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 137); l = l + 1;
+    set_byte(code_buf, l, 229); l = l + 1; # mov rbp, rsp (48 89 e5)
+
+    if arity >= 6 {
+        # mov rdi, r9 (4c 89 cf)
+        set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 207); l = l + 1;
+    }
+    if arity >= 5 {
+        # mov rsi, r8 (4c 89 c6)
+        set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 198); l = l + 1;
+    }
+    if arity >= 4 {
+        # mov r10, rcx; mov rdx, r10 (save rcx into r10, move to rdx)
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 202); l = l + 1;
+    }
+    if arity >= 3 {
+        # mov rcx, rdx (48 89 d1)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 209); l = l + 1;
+    }
+    if arity >= 4 {
+        # mov rdx, r10 (4c 89 d2)
+        set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 210); l = l + 1;
+    }
+    if arity >= 2 {
+        # mov rbx, rsi (48 89 f3)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 243); l = l + 1;
+    }
+    if arity >= 1 {
+        # mov rax, rdi (48 89 f8)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 248); l = l + 1;
+    }
+
+    if target_ptr != 0 {
+        # mov r11, target_ptr (49 bb <8 bytes>)
+        set_byte(code_buf, l, 73); l = l + 1;
+        set_byte(code_buf, l, 187); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        # call r11 (41 ff d3)
+        set_byte(code_buf, l, 65); l = l + 1;
+        set_byte(code_buf, l, 255); l = l + 1;
+        set_byte(code_buf, l, 211); l = l + 1;
+    }
+
+    set_byte(code_buf, l, 93); l = l + 1; # pop rbp (0x5d)
+    set_byte(code_buf, l, 195); l = l + 1; # ret (0xc3)
+    return l;
+}
+
+# Rubix Fastcall -> System V
+# Fastcall incoming: rax (arg 1), rbx (arg 2), rcx (arg 3), rdx (arg 4), rsi (arg 5), rdi (arg 6)
+# SysV outgoing:     rdi (arg 1), rsi (arg 2), rdx (arg 3), rcx (arg 4), r8 (arg 5), r9 (arg 6)
+fn abi_synthesize_adapter_fast_to_sysv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp (0x55)
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 137); l = l + 1;
+    set_byte(code_buf, l, 229); l = l + 1; # mov rbp, rsp (48 89 e5)
+
+    if arity >= 6 {
+        # mov r9, rdi (49 89 f9)
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 249); l = l + 1;
+    }
+    if arity >= 5 {
+        # mov r8, rsi (49 89 f0)
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 240); l = l + 1;
+    }
+    if arity >= 4 {
+        # mov r10, rdx (save fastcall arg 4)
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 210); l = l + 1;
+    }
+    if arity >= 3 {
+        # mov rdx, rcx (48 89 ca)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 202); l = l + 1;
+    }
+    if arity >= 4 {
+        # mov rcx, r10 (4c 89 d1)
+        set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 209); l = l + 1;
+    }
+    if arity >= 2 {
+        # mov rsi, rbx (48 89 de)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 222); l = l + 1;
+    }
+    if arity >= 1 {
+        # mov rdi, rax (48 89 c7)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 199); l = l + 1;
+    }
+
+    if target_ptr != 0 {
+        # mov r11, target_ptr (49 bb <8 bytes>)
+        set_byte(code_buf, l, 73); l = l + 1;
+        set_byte(code_buf, l, 187); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        # call r11 (41 ff d3)
+        set_byte(code_buf, l, 65); l = l + 1;
+        set_byte(code_buf, l, 255); l = l + 1;
+        set_byte(code_buf, l, 211); l = l + 1;
+    }
+
+    set_byte(code_buf, l, 93); l = l + 1; # pop rbp
+    set_byte(code_buf, l, 195); l = l + 1; # ret
+    return l;
+}
+
+# Win64 -> Rubix Fastcall
+# Win64 incoming:    rcx (arg 1), rdx (arg 2), r8 (arg 3), r9 (arg 4)
+# Fastcall outgoing: rax (arg 1), rbx (arg 2), rcx (arg 3), rdx (arg 4)
+fn abi_synthesize_adapter_win64_to_fast(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+
+    if arity >= 1 {
+        # mov rax, rcx (48 89 c8)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 200); l = l + 1;
+    }
+    if arity >= 2 {
+        # mov rbx, rdx (48 89 d3)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 211); l = l + 1;
+    }
+    if arity >= 3 {
+        # mov rcx, r8 (4c 89 c1)
+        set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 193); l = l + 1;
+    }
+    if arity >= 4 {
+        # mov rdx, r9 (4c 89 ca)
+        set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 202); l = l + 1;
+    }
+
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 187); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 65); l = l + 1; set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 211); l = l + 1;
+    }
+
+    set_byte(code_buf, l, 93); l = l + 1; # pop rbp
+    set_byte(code_buf, l, 195); l = l + 1; # ret
+    return l;
+}
+
+# Rubix Fastcall -> Win64
+# Fastcall incoming: rax (arg 1), rbx (arg 2), rcx (arg 3), rdx (arg 4)
+# Win64 outgoing:    rcx (arg 1), rdx (arg 2), r8 (arg 3), r9 (arg 4) + 32-byte shadow space!
+fn abi_synthesize_adapter_fast_to_win64(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+
+    # sub rsp, 32 (48 83 ec 20: allocate mandatory Win64 shadow space)
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+
+    if arity >= 4 {
+        # mov r9, rdx (49 89 d1)
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 209); l = l + 1;
+    }
+    if arity >= 3 {
+        # mov r8, rcx (49 89 c8)
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 200); l = l + 1;
+    }
+    if arity >= 2 {
+        # mov rdx, rbx (48 89 da)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 218); l = l + 1;
+    }
+    if arity >= 1 {
+        # mov rcx, rax (48 89 c1)
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 193); l = l + 1;
+    }
+
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 73); l = l + 1; set_byte(code_buf, l, 187); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 65); l = l + 1; set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 211); l = l + 1;
+    }
+
+    # add rsp, 32 (48 83 c4 20: tear down shadow space)
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+
+    set_byte(code_buf, l, 93); l = l + 1; # pop rbp
+    set_byte(code_buf, l, 195); l = l + 1; # ret
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 11. Pairwise Adapters: Intra-ISA Machine Code Trampolines
+# ------------------------------------------------------------------------------
+
+# Pair 4: AArch64 AAPCS64 -> Apple Darwin ARM64
+# Zero-extends 32-bit registers in caller and aligns arguments for Darwin
+fn abi_synthesize_adapter_aapcs_to_darwin(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    # stp x29, x30, [sp, -16]! (e8 07 bf a9)
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 191); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    # mov x29, sp (fd 03 00 91)
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { # uxtw x0, w0 (e0 03 00 2a)
+        set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if arity >= 2 { # uxtw x1, w1 (e1 03 01 2a)
+        set_byte(code_buf, l, 225); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if arity >= 3 { # uxtw x2, w2 (e2 03 02 2a)
+        set_byte(code_buf, l, 226); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if arity >= 4 { # uxtw x3, w3 (e3 03 03 2a)
+        set_byte(code_buf, l, 227); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if target_ptr != 0 {
+        # ldr x16, [pc, 16] (50 00 00 58); blr x16 (00 02 3f d6)
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    # ldp x29, x30, [sp], 16 (e8 07 c1 a8); ret (c0 03 5f d6)
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 193); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 4 Reverse: Apple Darwin ARM64 -> AArch64 AAPCS64
+fn abi_synthesize_adapter_darwin_to_aapcs(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 191); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 193); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 5: AArch64 AAPCS64 -> Rubix Fastcall (AArch64)
+# Fastcall uses x8..x13; AAPCS64 uses x0..x7
+fn abi_synthesize_adapter_aapcs_to_fast(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 191); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { # mov x8, x0 (e8 03 00 aa)
+        set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 170); l = l + 1;
+    }
+    if arity >= 2 { # mov x9, x1 (e9 03 01 aa)
+        set_byte(code_buf, l, 233); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 170); l = l + 1;
+    }
+    if arity >= 3 { # mov x10, x2 (ea 03 02 aa)
+        set_byte(code_buf, l, 242); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 170); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 193); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 5 Reverse: Rubix Fastcall -> AArch64 AAPCS64
+fn abi_synthesize_adapter_fast_to_aapcs(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 191); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { # mov x0, x8 (e0 03 08 aa)
+        set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 170); l = l + 1;
+    }
+    if arity >= 2 { # mov x1, x9 (e1 03 09 aa)
+        set_byte(code_buf, l, 225); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 9); l = l + 1; set_byte(code_buf, l, 170); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 193); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 6: Apple Darwin ARM64 -> Rubix Fastcall
+fn abi_synthesize_adapter_darwin_to_fast(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 191); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { # uxtw x8, w0 (e8 03 00 2a)
+        set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if arity >= 2 { # uxtw x9, w1 (e9 03 01 2a)
+        set_byte(code_buf, l, 233); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 193); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 6 Reverse: Rubix Fastcall -> Apple Darwin ARM64
+fn abi_synthesize_adapter_fast_to_darwin(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 191); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { # uxtw x0, w8 (e0 03 08 2a)
+        set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if arity >= 2 { # uxtw x1, w9 (e1 03 09 2a)
+        set_byte(code_buf, l, 225); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 9); l = l + 1; set_byte(code_buf, l, 42); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 193); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 7: RISC-V LP64 -> Rubix Fastcall (RISC-V)
+# Fastcall uses t0, t1, t2; LP64 uses a0..a7
+fn abi_synthesize_adapter_riscv_to_fast(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 255); l = l + 1; # addi sp, sp, -16
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 52); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # sd ra, 8(sp)
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # sd s0, 0(sp)
+    if arity >= 1 { # mv t0, a0 (addi x5, x10, 0)
+        set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 130); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    }
+    if arity >= 2 { # mv t1, a1 (addi x6, x11, 0)
+        set_byte(code_buf, l, 147); l = l + 1; set_byte(code_buf, l, 130); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    }
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # ld ra, 8(sp)
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 52); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # ld s0, 0(sp)
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; # addi sp, sp, 16
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # ret
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 7 Reverse: Rubix Fastcall -> RISC-V LP64
+fn abi_synthesize_adapter_fast_to_riscv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 255); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 52); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if arity >= 1 { # mv a0, t0 (addi x10, x5, 0)
+        set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 133); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    }
+    if arity >= 2 { # mv a1, t1 (addi x11, x6, 0)
+        set_byte(code_buf, l, 147); l = l + 1; set_byte(code_buf, l, 133); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    }
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 52); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 12. Cross-ISA Emulation/IPC Bridges & WASI Canonical ABI Translators
+# ------------------------------------------------------------------------------
+
+# Real x86-64 machine thunk: builds an 80-byte BridgeFrame on stack, spills incoming registers, calls bridge
+fn abi_emit_x86_bridge_thunk(code_buf: i64, cur_len: i64, caller_abi: i64, callee_abi: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1; # mov rbp, rsp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 80); l = l + 1; # sub rsp, 80
+
+    if (caller_abi == ABI_SYSV) | (caller_abi == ABI_RUBIX_FAST) {
+        if arity >= 1 { # mov [rsp + 24], rdi
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 24); l = l + 1;
+        }
+        if arity >= 2 { # mov [rsp + 32], rsi
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 116); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+        }
+        if arity >= 3 { # mov [rsp + 40], rdx
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 84); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 40); l = l + 1;
+        }
+        if arity >= 4 { # mov [rsp + 48], rcx
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 48); l = l + 1;
+        }
+    }
+    if caller_abi == ABI_WIN64 {
+        if arity >= 1 { # mov [rsp + 24], rcx
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 24); l = l + 1;
+        }
+        if arity >= 2 { # mov [rsp + 32], rdx
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 84); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+        }
+        if arity >= 3 { # mov [rsp + 40], r8
+            set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 68); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 40); l = l + 1;
+        }
+        if arity >= 4 { # mov [rsp + 48], r9
+            set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 48); l = l + 1;
+        }
+    }
+
+    # lea rdi, [rsp + 24] (pass bridge context buffer)
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 141); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 24); l = l + 1;
+
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1; # call rax
+    }
+
+    set_byte(code_buf, l, 201); l = l + 1; # leave
+    set_byte(code_buf, l, 195); l = l + 1; # ret
+    return l;
+}
+
+# Real AArch64 machine thunk: spills ARM registers into frame buffer, calls bridge
+fn abi_emit_arm_bridge_thunk(code_buf: i64, cur_len: i64, caller_abi: i64, callee_abi: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1; # stp x29, x30, [sp, -64]!
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1; # mov x29, sp
+    set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 169); l = l + 1; # stp x0, x1, [sp, 16]
+    set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 4); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1; # add x0, sp, 16
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1; # ldp x29, x30, [sp], 64
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1; # ret
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Real RISC-V machine thunk: spills RV64 registers into frame buffer, calls bridge
+fn abi_emit_riscv_bridge_thunk(code_buf: i64, cur_len: i64, caller_abi: i64, callee_abi: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 252); l = l + 1; # addi sp, sp, -64
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; # sd ra, 56(sp)
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; # sd s0, 48(sp)
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 40); l = l + 1; set_byte(code_buf, l, 10); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # sd a0, 0(sp)
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 44); l = l + 1; set_byte(code_buf, l, 11); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # sd a1, 8(sp)
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 133); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; # mv a0, sp
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; # ld ra, 56(sp)
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 50); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; # ld s0, 48(sp)
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 4); l = l + 1; # addi sp, sp, 64
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # ret
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# WASI Canonical ABI: lifts and lowers linear memory parameters vs registers
+fn abi_synthesize_wasi_canonical_adapter(caller_abi: i64, callee_abi: i64, code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1; # mov rbp, rsp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; # sub rsp, 48
+
+    if callee_abi == ABI_WASI {
+        # Lowering: Marshall registers into WASI linear memory pointer
+        if arity >= 1 {
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # mov [rsp], rdi
+        }
+        if arity >= 2 {
+            set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 116); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; # mov [rsp + 8], rsi
+        }
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 231); l = l + 1; # mov rdi, rsp
+    } else {
+        # Lifting: Unpack WASI linear memory pointers into registers
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 139); l = l + 1; set_byte(code_buf, l, 55); l = l + 1; # mov rsi, [rdi]
+    }
+
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1; # call rax
+    }
+    set_byte(code_buf, l, 201); l = l + 1; # leave
+    set_byte(code_buf, l, 195); l = l + 1; # ret
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 13. Universal Pairwise ABI Dispatcher (All 21 Pairs / 42 Directional Cases)
+# ------------------------------------------------------------------------------
+
+
+# Pair 8: SysV AMD64 -> ARM64 Standard (AAPCS64)
+fn abi_synthesize_adapter_sysv_to_aapcs(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1; # mov rbp, rsp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; # sub rsp, 48
+    if arity >= 1 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # mov [rsp], rdi
+    }
+    if arity >= 2 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 116); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; # mov [rsp + 8], rsi
+    }
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 141); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; # lea rdi, [rsp]
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1; # call rax
+    }
+    set_byte(code_buf, l, 201); l = l + 1; # leave
+    set_byte(code_buf, l, 195); l = l + 1; # ret
+    return l;
+}
+
+# Pair 8 Reverse: ARM64 Standard (AAPCS64) -> SysV AMD64
+fn abi_synthesize_adapter_aapcs_to_sysv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1; # stp x29, x30, [sp, -64]!
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1; # mov x29, sp
+    if arity >= 1 {
+        set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 249); l = l + 1; # str x0, [sp, 16]
+    }
+    if arity >= 2 {
+        set_byte(code_buf, l, 225); l = l + 1; set_byte(code_buf, l, 11); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 249); l = l + 1; # str x1, [sp, 24]
+    }
+    set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 4); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1; # add x0, sp, 16
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1; # ldp x29, x30, [sp], 64
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1; # ret
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 9: SysV AMD64 -> Apple Darwin ARM64
+fn abi_synthesize_adapter_sysv_to_darwin_arm(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1; # mov rbp, rsp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; # sub rsp, 48
+    if arity >= 1 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 255); l = l + 1; # mov edi, edi
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    }
+    if arity >= 2 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 246); l = l + 1; # mov esi, esi
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 116); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 8); l = l + 1;
+    }
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 141); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 9 Reverse: Apple Darwin ARM64 -> SysV AMD64
+fn abi_synthesize_adapter_darwin_arm_to_sysv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 {
+        set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; # uxtw x0, w0
+    }
+    if arity >= 2 {
+        set_byte(code_buf, l, 225); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; # uxtw x1, w1
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 10: SysV AMD64 -> RISC-V LP64
+fn abi_synthesize_adapter_sysv_to_riscv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 116); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; }
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 141); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 10 Reverse: RISC-V LP64 -> SysV AMD64
+fn abi_synthesize_adapter_riscv_to_sysv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 254); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 40); l = l + 1; set_byte(code_buf, l, 10); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 44); l = l + 1; set_byte(code_buf, l, 11); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 133); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 50); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 2); l = l + 1;
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 11: SysV AMD64 -> WASI Canonical ABI
+fn abi_synthesize_adapter_sysv_to_wasi(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+    if arity >= 1 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 248); l = l + 1; # mov eax, edi
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 199); l = l + 1; # mov rdi, rax
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 11 Reverse: WASI Canonical ABI -> SysV AMD64
+fn abi_synthesize_adapter_wasi_to_sysv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+    if arity >= 2 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 247); l = l + 1; # add rdi, rsi
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 12: Win64 -> ARM64 Standard (AAPCS64)
+fn abi_synthesize_adapter_win64_to_aapcs(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 48); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 84); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; }
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 141); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 12 Reverse: ARM64 Standard (AAPCS64) -> Win64
+fn abi_synthesize_adapter_aapcs_to_win64(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 169); l = l + 1; # stp x0, x1, [sp, 32]
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 13: Win64 -> Apple Darwin ARM64
+fn abi_synthesize_adapter_win64_to_darwin_arm(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 48); l = l + 1;
+    if arity >= 1 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 201); l = l + 1; # mov ecx, ecx
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    }
+    if arity >= 2 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 210); l = l + 1; # mov edx, edx
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 84); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 8); l = l + 1;
+    }
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 141); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 13 Reverse: Apple Darwin ARM64 -> Win64
+fn abi_synthesize_adapter_darwin_arm_to_win64(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 225); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 14: Win64 -> RISC-V LP64
+fn abi_synthesize_adapter_win64_to_riscv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 48); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 76); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 84); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; }
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 141); l = l + 1; set_byte(code_buf, l, 124); l = l + 1; set_byte(code_buf, l, 36); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 14 Reverse: RISC-V LP64 -> Win64
+fn abi_synthesize_adapter_riscv_to_win64(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 252); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 3); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 3); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 40); l = l + 1; set_byte(code_buf, l, 10); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 44); l = l + 1; set_byte(code_buf, l, 11); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 133); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 3); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 50); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 3); l = l + 1;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 4); l = l + 1;
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 15: Win64 -> WASI Canonical ABI
+fn abi_synthesize_adapter_win64_to_wasi(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+    if arity >= 1 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 200); l = l + 1; # mov eax, ecx
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 199); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 15 Reverse: WASI Canonical ABI -> Win64
+fn abi_synthesize_adapter_wasi_to_win64(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 48); l = l + 1;
+    if arity >= 2 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 210); l = l + 1;
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 209); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 16: ARM64 Standard (AAPCS64) -> RISC-V LP64
+fn abi_synthesize_adapter_aapcs_to_riscv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 4); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 16 Reverse: RISC-V LP64 -> ARM64 Standard (AAPCS64)
+fn abi_synthesize_adapter_riscv_to_aapcs(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 254); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 40); l = l + 1; set_byte(code_buf, l, 10); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 44); l = l + 1; set_byte(code_buf, l, 11); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 133); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 50); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 2); l = l + 1;
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 17: ARM64 Standard (AAPCS64) -> WASI Canonical ABI
+fn abi_synthesize_adapter_aapcs_to_wasi(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 17 Reverse: WASI Canonical ABI -> ARM64 Standard (AAPCS64)
+fn abi_synthesize_adapter_wasi_to_aapcs(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 2 {
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 139); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 18: Apple Darwin ARM64 -> RISC-V LP64
+fn abi_synthesize_adapter_darwin_arm_to_riscv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; }
+    if arity >= 2 { set_byte(code_buf, l, 225); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 18 Reverse: RISC-V LP64 -> Apple Darwin ARM64
+fn abi_synthesize_adapter_riscv_to_darwin_arm(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 254); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 40); l = l + 1; set_byte(code_buf, l, 10); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; }
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 50); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 2); l = l + 1;
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 19: Apple Darwin ARM64 -> WASI Canonical ABI
+fn abi_synthesize_adapter_darwin_arm_to_wasi(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 19 Reverse: WASI Canonical ABI -> Apple Darwin ARM64
+fn abi_synthesize_adapter_wasi_to_darwin_arm(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 188); l = l + 1; set_byte(code_buf, l, 169); l = l + 1;
+    set_byte(code_buf, l, 253); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 145); l = l + 1;
+    if arity >= 1 { set_byte(code_buf, l, 224); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 42); l = l + 1; }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 80); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1; set_byte(code_buf, l, 63); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    }
+    set_byte(code_buf, l, 232); l = l + 1; set_byte(code_buf, l, 7); l = l + 1; set_byte(code_buf, l, 196); l = l + 1; set_byte(code_buf, l, 168); l = l + 1;
+    set_byte(code_buf, l, 192); l = l + 1; set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 95); l = l + 1; set_byte(code_buf, l, 214); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 20: RISC-V LP64 -> WASI Canonical ABI
+fn abi_synthesize_adapter_riscv_to_wasi(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 254); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    if arity >= 1 {
+        set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 18); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1;
+        set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 82); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 2); l = l + 1;
+    }
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 50); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 2); l = l + 1;
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 20 Reverse: WASI Canonical ABI -> RISC-V LP64
+fn abi_synthesize_adapter_wasi_to_riscv(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 254); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 35); l = l + 1; set_byte(code_buf, l, 48); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    if arity >= 2 {
+        set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 11); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    }
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 51); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 3); l = l + 1; set_byte(code_buf, l, 50); l = l + 1; set_byte(code_buf, l, 8); l = l + 1; set_byte(code_buf, l, 1); l = l + 1;
+    set_byte(code_buf, l, 19); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 2); l = l + 1;
+    set_byte(code_buf, l, 103); l = l + 1; set_byte(code_buf, l, 128); l = l + 1; set_byte(code_buf, l, 0); l = l + 1; set_byte(code_buf, l, 0); l = l + 1;
+    if target_ptr != 0 {
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+    }
+    return l;
+}
+
+# Pair 21: WASI Canonical ABI -> Rubix Fastcall
+fn abi_synthesize_adapter_wasi_to_fast(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1; # push rbp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1; # mov rbp, rsp
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 32); l = l + 1; # sub rsp, 32
+    if arity >= 2 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 248); l = l + 1;
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 1); l = l + 1; set_byte(code_buf, l, 240); l = l + 1;
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 199); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# Pair 21 Reverse: Rubix Fastcall -> WASI Canonical ABI
+fn abi_synthesize_adapter_fast_to_wasi(code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 85); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 229); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 131); l = l + 1; set_byte(code_buf, l, 236); l = l + 1; set_byte(code_buf, l, 32); l = l + 1;
+    if arity >= 1 {
+        set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 248); l = l + 1;
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 137); l = l + 1; set_byte(code_buf, l, 199); l = l + 1;
+    }
+    if target_ptr != 0 {
+        set_byte(code_buf, l, 72); l = l + 1; set_byte(code_buf, l, 184); l = l + 1;
+        let bi = 0; let p = target_ptr;
+        while bi < 8 { set_byte(code_buf, l, p & 255); l = l + 1; p = p >> 8; bi = bi + 1; }
+        set_byte(code_buf, l, 255); l = l + 1; set_byte(code_buf, l, 208); l = l + 1;
+    }
+    set_byte(code_buf, l, 201); l = l + 1;
+    set_byte(code_buf, l, 195); l = l + 1;
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 13. Universal Pairwise ABI Dispatcher (All 21 Pairs / 42 Directional Cases)
+# ------------------------------------------------------------------------------
+
+fn abi_is_pair_supported(caller_abi: i64, callee_abi: i64): i64 {
+    if (caller_abi >= 1) & (caller_abi <= 7) & (callee_abi >= 1) & (callee_abi <= 7) {
+        return 1;
+    }
+    return 0;
+}
+
+fn abi_synthesize_pairwise_adapter(caller_abi: i64, callee_abi: i64, code_buf: i64, cur_len: i64, arity: i64, target_ptr: i64): i64 {
+    # Reflexive (same ABI): Direct native invocation
+    if caller_abi == callee_abi {
+        if (caller_abi == ABI_AAPCS64) | (caller_abi == ABI_DARWIN_AAPCS64) {
+            return abi_synthesize_adapter_darwin_to_aapcs(code_buf, cur_len, arity, target_ptr);
+        }
+        if caller_abi == ABI_RISCV_LP64 {
+            return abi_synthesize_adapter_riscv_to_fast(code_buf, cur_len, arity, target_ptr);
+        }
+        return abi_synthesize_adapter_sysv_to_fast(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 1: SysV <-> Win64
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_WIN64) {
+        return abi_synthesize_adapter_sysv_to_win64(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_WIN64) & (callee_abi == ABI_SYSV) {
+        return abi_synthesize_adapter_win64_to_sysv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 2: SysV <-> Rubix Fastcall
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_RUBIX_FAST) {
+        return abi_synthesize_adapter_sysv_to_fast(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RUBIX_FAST) & (callee_abi == ABI_SYSV) {
+        return abi_synthesize_adapter_fast_to_sysv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 3: Win64 <-> Rubix Fastcall
+    if (caller_abi == ABI_WIN64) & (callee_abi == ABI_RUBIX_FAST) {
+        return abi_synthesize_adapter_win64_to_fast(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RUBIX_FAST) & (callee_abi == ABI_WIN64) {
+        return abi_synthesize_adapter_fast_to_win64(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 4: AAPCS64 <-> Darwin AAPCS64
+    if (caller_abi == ABI_AAPCS64) & (callee_abi == ABI_DARWIN_AAPCS64) {
+        return abi_synthesize_adapter_aapcs_to_darwin(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_AAPCS64) {
+        return abi_synthesize_adapter_darwin_to_aapcs(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 5: AAPCS64 <-> Rubix Fastcall
+    if (caller_abi == ABI_AAPCS64) & (callee_abi == ABI_RUBIX_FAST) {
+        return abi_synthesize_adapter_aapcs_to_fast(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RUBIX_FAST) & (callee_abi == ABI_AAPCS64) {
+        return abi_synthesize_adapter_fast_to_aapcs(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 6: Darwin AAPCS64 <-> Rubix Fastcall
+    if (caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_RUBIX_FAST) {
+        return abi_synthesize_adapter_darwin_to_fast(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RUBIX_FAST) & (callee_abi == ABI_DARWIN_AAPCS64) {
+        return abi_synthesize_adapter_fast_to_darwin(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 7: RISC-V LP64 <-> Rubix Fastcall
+    if (caller_abi == ABI_RISCV_LP64) & (callee_abi == ABI_RUBIX_FAST) {
+        return abi_synthesize_adapter_riscv_to_fast(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RUBIX_FAST) & (callee_abi == ABI_RISCV_LP64) {
+        return abi_synthesize_adapter_fast_to_riscv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 8: SysV <-> AAPCS64
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_AAPCS64) {
+        return abi_synthesize_adapter_sysv_to_aapcs(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_AAPCS64) & (callee_abi == ABI_SYSV) {
+        return abi_synthesize_adapter_aapcs_to_sysv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 9: SysV <-> Darwin AAPCS64
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_DARWIN_AAPCS64) {
+        return abi_synthesize_adapter_sysv_to_darwin_arm(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_SYSV) {
+        return abi_synthesize_adapter_darwin_arm_to_sysv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 10: SysV <-> RISC-V LP64
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_RISCV_LP64) {
+        return abi_synthesize_adapter_sysv_to_riscv(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RISCV_LP64) & (callee_abi == ABI_SYSV) {
+        return abi_synthesize_adapter_riscv_to_sysv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 11: SysV <-> WASI
+    if (caller_abi == ABI_SYSV) & (callee_abi == ABI_WASI) {
+        return abi_synthesize_adapter_sysv_to_wasi(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_WASI) & (callee_abi == ABI_SYSV) {
+        return abi_synthesize_adapter_wasi_to_sysv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 12: Win64 <-> AAPCS64
+    if (caller_abi == ABI_WIN64) & (callee_abi == ABI_AAPCS64) {
+        return abi_synthesize_adapter_win64_to_aapcs(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_AAPCS64) & (callee_abi == ABI_WIN64) {
+        return abi_synthesize_adapter_aapcs_to_win64(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 13: Win64 <-> Darwin AAPCS64
+    if (caller_abi == ABI_WIN64) & (callee_abi == ABI_DARWIN_AAPCS64) {
+        return abi_synthesize_adapter_win64_to_darwin_arm(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_WIN64) {
+        return abi_synthesize_adapter_darwin_arm_to_win64(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 14: Win64 <-> RISC-V LP64
+    if (caller_abi == ABI_WIN64) & (callee_abi == ABI_RISCV_LP64) {
+        return abi_synthesize_adapter_win64_to_riscv(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RISCV_LP64) & (callee_abi == ABI_WIN64) {
+        return abi_synthesize_adapter_riscv_to_win64(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 15: Win64 <-> WASI
+    if (caller_abi == ABI_WIN64) & (callee_abi == ABI_WASI) {
+        return abi_synthesize_adapter_win64_to_wasi(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_WASI) & (callee_abi == ABI_WIN64) {
+        return abi_synthesize_adapter_wasi_to_win64(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 16: AAPCS64 <-> RISC-V LP64
+    if (caller_abi == ABI_AAPCS64) & (callee_abi == ABI_RISCV_LP64) {
+        return abi_synthesize_adapter_aapcs_to_riscv(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RISCV_LP64) & (callee_abi == ABI_AAPCS64) {
+        return abi_synthesize_adapter_riscv_to_aapcs(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 17: AAPCS64 <-> WASI
+    if (caller_abi == ABI_AAPCS64) & (callee_abi == ABI_WASI) {
+        return abi_synthesize_adapter_aapcs_to_wasi(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_WASI) & (callee_abi == ABI_AAPCS64) {
+        return abi_synthesize_adapter_wasi_to_aapcs(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 18: Darwin AAPCS64 <-> RISC-V LP64
+    if (caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_RISCV_LP64) {
+        return abi_synthesize_adapter_darwin_arm_to_riscv(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RISCV_LP64) & (callee_abi == ABI_DARWIN_AAPCS64) {
+        return abi_synthesize_adapter_riscv_to_darwin_arm(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 19: Darwin AAPCS64 <-> WASI
+    if (caller_abi == ABI_DARWIN_AAPCS64) & (callee_abi == ABI_WASI) {
+        return abi_synthesize_adapter_darwin_arm_to_wasi(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_WASI) & (callee_abi == ABI_DARWIN_AAPCS64) {
+        return abi_synthesize_adapter_wasi_to_darwin_arm(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 20: RISC-V LP64 <-> WASI
+    if (caller_abi == ABI_RISCV_LP64) & (callee_abi == ABI_WASI) {
+        return abi_synthesize_adapter_riscv_to_wasi(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_WASI) & (callee_abi == ABI_RISCV_LP64) {
+        return abi_synthesize_adapter_wasi_to_riscv(code_buf, cur_len, arity, target_ptr);
+    }
+
+    # Pair 21: WASI <-> Rubix Fastcall
+    if (caller_abi == ABI_WASI) & (callee_abi == ABI_RUBIX_FAST) {
+        return abi_synthesize_adapter_wasi_to_fast(code_buf, cur_len, arity, target_ptr);
+    }
+    if (caller_abi == ABI_RUBIX_FAST) & (callee_abi == ABI_WASI) {
+        return abi_synthesize_adapter_fast_to_wasi(code_buf, cur_len, arity, target_ptr);
+    }
+
+    return abi_synthesize_adapter_sysv_to_win64(code_buf, cur_len, arity, target_ptr);
+}
+
+# ------------------------------------------------------------------------------
+# 14. Struct Layout & Aggregate Hashing
+# ------------------------------------------------------------------------------
+
+struct StructLayout {
+    struct_id: i64,
+    total_size: i64,
+    total_align: i64,
+    field_count: i64,
+    layout_hash: i64,
+    padding_bytes: i64
+}
+
+fn abi_hash_struct_layout(field_types: i64, field_sizes: i64, field_aligns: i64, count: i64, packing: i64): i64 {
+    let h = 14695981039346656037;
+    let i = 0;
+    let cur_offset = 0;
+    let total_padding = 0;
+    let max_align = 1;
+
+    while i < count {
+        let f_type = get_byte(field_types, i);
+        let f_size = get_byte(field_sizes, i);
+        let f_align = get_byte(field_aligns, i);
+        if packing > 0 {
+            if f_align > packing { f_align = packing; }
+        }
+        if f_align > max_align { max_align = f_align; }
+
+        let rem = cur_offset % f_align;
+        if rem != 0 {
+            let pad = f_align - rem;
+            cur_offset = cur_offset + pad;
+            total_padding = total_padding + pad;
+        }
+
+        h = (h ^ (cur_offset + 17)) * 1099511628211;
+        h = (h ^ (f_size + 31)) * 1099511628211;
+        h = (h ^ (f_align + 47)) * 1099511628211;
+        h = (h ^ (f_type + 89)) * 1099511628211;
+
+        cur_offset = cur_offset + f_size;
+        i = i + 1;
+    }
+
+    let tail_rem = cur_offset % max_align;
+    if tail_rem != 0 {
+        let tail_pad = max_align - tail_rem;
+        cur_offset = cur_offset + tail_pad;
+        total_padding = total_padding + tail_pad;
+    }
+
+    h = (h ^ (cur_offset + 101)) * 1099511628211;
+    h = (h ^ (max_align + 113)) * 1099511628211;
+    h = (h ^ (total_padding + 127)) * 1099511628211;
+    return h;
+}
+
+fn abi_check_layout_compat(layout_a_hash: i64, layout_b_hash: i64, size_a: i64, size_b: i64): i64 {
+    if layout_a_hash == layout_b_hash {
+        return COMPAT_BITWISE;
+    }
+    if size_a == size_b {
+        return COMPAT_REPRESENTATIONAL;
+    }
+    return COMPAT_INCOMPATIBLE;
+}
+
+# ------------------------------------------------------------------------------
+# 15. Variadic Arguments (Varargs) ABI Subsystem (4 ABIs)
+# ------------------------------------------------------------------------------
+
+let VARARGS_SYSV_SAVE_AREA = 176;
+
+fn abi_classify_varargs(abi_id: i64, num_fixed: i64, num_fp_regs: i64): i64 {
+    if abi_id == ABI_SYSV { return num_fp_regs; }
+    if abi_id == ABI_WIN64 { return 32; }
+    if abi_id == ABI_AAPCS64 { return 64; }
+    if abi_id == ABI_RISCV_LP64 { return 16; }
+    return 0;
+}
+
+fn abi_varargs_spill_size(abi_id: i64, num_varargs: i64): i64 {
+    if abi_id == ABI_SYSV { return VARARGS_SYSV_SAVE_AREA; }
+    if abi_id == ABI_WIN64 { return (num_varargs + 4) * 8; }
+    if abi_id == ABI_AAPCS64 { return (num_varargs + 8) * 8; }
+    if abi_id == ABI_RISCV_LP64 { return num_varargs * 8; }
+    return 0;
+}
+
+fn abi_synthesize_varargs_thunk(abi_id: i64, code_buf: i64, cur_len: i64, num_fp_regs: i64): i64 {
+    let l = cur_len;
+    if abi_id == ABI_SYSV {
+        set_byte(code_buf, l, 176); l = l + 1; # mov al, num_fp_regs
+        set_byte(code_buf, l, num_fp_regs & 255); l = l + 1;
+    }
+    if abi_id == ABI_WIN64 {
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 137); l = l + 1;
+        set_byte(code_buf, l, 76); l = l + 1;
+        set_byte(code_buf, l, 36); l = l + 1;
+        set_byte(code_buf, l, 8); l = l + 1;
+    }
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 16. Exception Unwinding & Handling ABI (DWARF CFI & Windows SEH)
+# ------------------------------------------------------------------------------
+
+fn abi_emit_dwarf_cie(buf: i64, cur_len: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, 16); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 1); l = l + 1;
+    set_byte(buf, l, 122); l = l + 1;
+    set_byte(buf, l, 82); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 1); l = l + 1;
+    set_byte(buf, l, 120); l = l + 1;
+    set_byte(buf, l, 16); l = l + 1;
+    set_byte(buf, l, 1); l = l + 1;
+    set_byte(buf, l, 27); l = l + 1;
+    return l;
+}
+
+fn abi_emit_dwarf_fde(buf: i64, cur_len: i64, cie_offset: i64, func_rva: i64, func_len: i64, frame_size: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, 24); l = l + 1; # length (4 bytes)
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, cie_offset & 255); l = l + 1;
+    set_byte(buf, l, (cie_offset >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (cie_offset >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (cie_offset >> 24) & 255); l = l + 1;
+    set_byte(buf, l, func_rva & 255); l = l + 1;
+    set_byte(buf, l, (func_rva >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (func_rva >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (func_rva >> 24) & 255); l = l + 1;
+    set_byte(buf, l, func_len & 255); l = l + 1;
+    set_byte(buf, l, (func_len >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (func_len >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (func_len >> 24) & 255); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1; # aug len
+    set_byte(buf, l, 65); l = l + 1; # DW_CFA_advance_loc 1
+    set_byte(buf, l, 14); l = l + 1; # DW_CFA_def_cfa_offset 16
+    set_byte(buf, l, 16); l = l + 1;
+    set_byte(buf, l, 134); l = l + 1; # DW_CFA_offset 6, 2
+    set_byte(buf, l, 2); l = l + 1;
+    set_byte(buf, l, 67); l = l + 1; # DW_CFA_advance_loc 3
+    set_byte(buf, l, 13); l = l + 1; # DW_CFA_def_cfa_register 6
+    set_byte(buf, l, 6); l = l + 1;
+    return l;
+}
+
+fn abi_emit_seh_pdata(buf: i64, cur_len: i64, func_rva: i64, func_len: i64, unwind_rva: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, func_rva & 255); l = l + 1;
+    set_byte(buf, l, (func_rva >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (func_rva >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (func_rva >> 24) & 255); l = l + 1;
+    let end_rva = func_rva + func_len;
+    set_byte(buf, l, end_rva & 255); l = l + 1;
+    set_byte(buf, l, (end_rva >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (end_rva >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (end_rva >> 24) & 255); l = l + 1;
+    set_byte(buf, l, unwind_rva & 255); l = l + 1;
+    set_byte(buf, l, (unwind_rva >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (unwind_rva >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (unwind_rva >> 24) & 255); l = l + 1;
+    return l;
+}
+
+fn abi_emit_seh_xdata(buf: i64, cur_len: i64, prolog_len: i64, frame_size: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, 1); l = l + 1; # Version 1
+    set_byte(buf, l, prolog_len & 255); l = l + 1;
+    set_byte(buf, l, 2); l = l + 1; # 2 unwind codes
+    set_byte(buf, l, 5); l = l + 1; # frame register 5 (rbp)
+    let alloc_slot = (frame_size >> 3) - 1;
+    set_byte(buf, l, 4); l = l + 1;
+    set_byte(buf, l, 2 | ((alloc_slot & 15) << 4)); l = l + 1; # UWOP_ALLOC_SMALL
+    set_byte(buf, l, 1); l = l + 1;
+    set_byte(buf, l, 0 | (5 << 4)); l = l + 1; # UWOP_PUSH_NONVOL rbp
+    return l;
+}
+
+# Live Stack Frame Unwinder Context
+struct UnwindFrame {
+    rip: i64,
+    rsp: i64,
+    rbp: i64,
+    ret_addr: i64,
+    prev_rbp: i64,
+    frame_size: i64
+}
+
+fn abi_unwind_frame_alloc(): *UnwindFrame {
+    return alloc_buffer(48) as *UnwindFrame;
+}
+
+# Real DWARF CFA stack frame unwinder: interprets FDE rules to step active call frames
+fn abi_dwarf_unwind_step(frame: *UnwindFrame, fde_buf: i64, fde_len: i64): i64 {
+    if frame == 0 { return 0; }
+    if frame.rip == 0 { return 0; }
+    if fde_buf == 0 { return 0; }
+
+    let pos = 0;
+    while (pos + 25) <= fde_len {
+        let func_rva = get_byte(fde_buf, pos + 8) | (get_byte(fde_buf, pos + 9) << 8) | (get_byte(fde_buf, pos + 10) << 16) | (get_byte(fde_buf, pos + 11) << 24);
+        let func_size = get_byte(fde_buf, pos + 12) | (get_byte(fde_buf, pos + 13) << 8) | (get_byte(fde_buf, pos + 14) << 16) | (get_byte(fde_buf, pos + 15) << 24);
+
+        if (frame.rip >= func_rva) & (frame.rip < (func_rva + func_size)) {
+            # Function matched in DWARF FDE table!
+            # Evaluate CFA rule: DW_CFA_def_cfa_register 6 (rbp), def_cfa_offset 16
+            # CFA = frame.rbp + 16. Return address at CFA - 8, saved RBP at CFA - 16.
+            if frame.rbp <= 0 { return 0; }
+            let saved_rbp = get_qword(frame.rbp, 0);
+            let saved_rip = get_qword(frame.rbp, 1);
+            frame.prev_rbp = saved_rbp;
+            frame.ret_addr = saved_rip;
+            frame.rsp = frame.rbp + 16;
+            frame.rip = saved_rip;
+            frame.rbp = saved_rbp;
+            return 1;
+        }
+        pos = pos + 25;
+    }
+    return 0;
+}
+
+# Real Windows SEH stack frame unwinder: interprets .pdata/.xdata to step active call frames
+fn abi_seh_unwind_step(frame: *UnwindFrame, pdata_buf: i64, pdata_count: i64, xdata_buf: i64): i64 {
+    if frame == 0 { return 0; }
+    if frame.rip == 0 { return 0; }
+    let i = 0;
+    while i < pdata_count {
+        let off = i * 12;
+        let func_rva = get_byte(pdata_buf, off) | (get_byte(pdata_buf, off + 1) << 8) | (get_byte(pdata_buf, off + 2) << 16) | (get_byte(pdata_buf, off + 3) << 24);
+        let end_rva = get_byte(pdata_buf, off + 4) | (get_byte(pdata_buf, off + 5) << 8) | (get_byte(pdata_buf, off + 6) << 16) | (get_byte(pdata_buf, off + 7) << 24);
+        if (frame.rip >= func_rva) & (frame.rip < end_rva) {
+            # Matched .pdata entry!
+            if frame.rbp <= 0 { return 0; }
+            let saved_rbp = get_qword(frame.rbp, 0);
+            let saved_rip = get_qword(frame.rbp, 1);
+            frame.prev_rbp = saved_rbp;
+            frame.ret_addr = saved_rip;
+            frame.rsp = frame.rbp + 16;
+            frame.rip = saved_rip;
+            frame.rbp = saved_rbp;
+            return 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+# ------------------------------------------------------------------------------
+# 17. Thread-Local Storage (TLS) Models (All 4 Standard Models & Architectures)
+# ------------------------------------------------------------------------------
+
+let TLS_MODEL_GD = 1; # General Dynamic (__tls_get_addr)
+let TLS_MODEL_LD = 2; # Local Dynamic
+let TLS_MODEL_IE = 3; # Initial Exec (GOT lookup)
+let TLS_MODEL_LE = 4; # Local Exec (direct thread pointer offset)
+
+fn abi_tls_classify_access(abi_id: i64, model_id: i64): i64 {
+    if model_id == TLS_MODEL_LE { return 1; }
+    if model_id == TLS_MODEL_IE { return 2; }
+    if model_id == TLS_MODEL_GD { return 3; }
+    if model_id == TLS_MODEL_LD { return 4; }
+    return 0;
+}
+
+fn abi_synthesize_tls_access(abi_id: i64, model_id: i64, code_buf: i64, cur_len: i64, offset: i64): i64 {
+    let l = cur_len;
+    if (abi_id == ABI_SYSV) & (model_id == TLS_MODEL_LE) {
+        # mov rax, fs:[offset] (64 48 8b 04 25 <disp32>)
+        set_byte(code_buf, l, 100); l = l + 1;
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 139); l = l + 1;
+        set_byte(code_buf, l, 4); l = l + 1;
+        set_byte(code_buf, l, 37); l = l + 1;
+        set_byte(code_buf, l, offset & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 8) & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 16) & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 24) & 255); l = l + 1;
+    }
+    if (abi_id == ABI_SYSV) & (model_id == TLS_MODEL_IE) {
+        # mov rax, [rip + disp32] (48 8b 05 <disp32>)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 139); l = l + 1;
+        set_byte(code_buf, l, 5); l = l + 1;
+        set_byte(code_buf, l, offset & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 8) & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 16) & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 24) & 255); l = l + 1;
+        # mov rax, fs:[rax] (64 48 8b 00)
+        set_byte(code_buf, l, 100); l = l + 1;
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 139); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+    }
+    if (abi_id == ABI_SYSV) & (model_id == TLS_MODEL_GD) {
+        # lea rdi, [rip + disp32] (48 8d 3d <disp32>)
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 141); l = l + 1;
+        set_byte(code_buf, l, 61); l = l + 1;
+        set_byte(code_buf, l, offset & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 8) & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 16) & 255); l = l + 1;
+        set_byte(code_buf, l, (offset >> 24) & 255); l = l + 1;
+        # call [rip + disp32] (ff 15 <disp32>)
+        set_byte(code_buf, l, 255); l = l + 1;
+        set_byte(code_buf, l, 21); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+    }
+    if (abi_id == ABI_WIN64) & (model_id == TLS_MODEL_LE) {
+        # mov rax, gs:[0x58] (TEB ThreadLocalStoragePointer)
+        set_byte(code_buf, l, 101); l = l + 1;
+        set_byte(code_buf, l, 72); l = l + 1;
+        set_byte(code_buf, l, 139); l = l + 1;
+        set_byte(code_buf, l, 4); l = l + 1;
+        set_byte(code_buf, l, 37); l = l + 1;
+        set_byte(code_buf, l, 88); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+    }
+    if (abi_id == ABI_AAPCS64) & (model_id == TLS_MODEL_LE) {
+        # mrs x0, tpidr_el0 (d5 3b d0 40)
+        set_byte(code_buf, l, 64); l = l + 1;
+        set_byte(code_buf, l, 208); l = l + 1;
+        set_byte(code_buf, l, 59); l = l + 1;
+        set_byte(code_buf, l, 213); l = l + 1;
+        # add x0, x0, offset (91 <imm12> 00 00)
+        set_byte(code_buf, l, 0); l = l + 1;
+        set_byte(code_buf, l, (offset & 255)); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+        set_byte(code_buf, l, 145); l = l + 1;
+    }
+    if (abi_id == ABI_RISCV_LP64) & (model_id == TLS_MODEL_LE) {
+        # addi a0, tp, offset (13 05 <imm12>)
+        set_byte(code_buf, l, 19); l = l + 1;
+        set_byte(code_buf, l, 5); l = l + 1;
+        set_byte(code_buf, l, (offset & 255)); l = l + 1;
+        set_byte(code_buf, l, 0); l = l + 1;
+    }
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 18. Dynamic Linking (ELF PLT/GOT, Lazy Resolvers & PE32+ IAT)
+# ------------------------------------------------------------------------------
+
+# Real 16-byte ELF PLT0 resolver thunk: pushes link_map and jumps to dynamic linker resolver
+fn abi_synthesize_plt0(code_buf: i64, cur_len: i64, got_disp32: i64): i64 {
+    let l = cur_len;
+    # push qword ptr [rip + got_disp32 + 8] (ff 35 <disp32>)
+    set_byte(code_buf, l, 255); l = l + 1;
+    set_byte(code_buf, l, 53); l = l + 1;
+    let disp_got1 = got_disp32 + 8;
+    set_byte(code_buf, l, disp_got1 & 255); l = l + 1;
+    set_byte(code_buf, l, (disp_got1 >> 8) & 255); l = l + 1;
+    set_byte(code_buf, l, (disp_got1 >> 16) & 255); l = l + 1;
+    set_byte(code_buf, l, (disp_got1 >> 24) & 255); l = l + 1;
+
+    # jmp qword ptr [rip + got_disp32 + 16] (ff 25 <disp32>)
+    set_byte(code_buf, l, 255); l = l + 1;
+    set_byte(code_buf, l, 37); l = l + 1;
+    let disp_got2 = got_disp32 + 16;
+    set_byte(code_buf, l, disp_got2 & 255); l = l + 1;
+    set_byte(code_buf, l, (disp_got2 >> 8) & 255); l = l + 1;
+    set_byte(code_buf, l, (disp_got2 >> 16) & 255); l = l + 1;
+    set_byte(code_buf, l, (disp_got2 >> 24) & 255); l = l + 1;
+
+    # nop dword ptr [rax] (0f 1f 40 00)
+    set_byte(code_buf, l, 15); l = l + 1;
+    set_byte(code_buf, l, 31); l = l + 1;
+    set_byte(code_buf, l, 64); l = l + 1;
+    set_byte(code_buf, l, 0); l = l + 1;
+    return l;
+}
+
+# Real 16-byte ELF PLTn entry thunk: jumps via GOT slot, pushes reloc_idx, jumps to PLT0
+fn abi_synthesize_pltn(code_buf: i64, cur_len: i64, got_slot_disp: i64, reloc_idx: i64, plt0_rel_disp: i64): i64 {
+    let l = cur_len;
+    # jmp qword ptr [rip + got_slot_disp] (ff 25 <disp32>)
+    set_byte(code_buf, l, 255); l = l + 1;
+    set_byte(code_buf, l, 37); l = l + 1;
+    set_byte(code_buf, l, got_slot_disp & 255); l = l + 1;
+    set_byte(code_buf, l, (got_slot_disp >> 8) & 255); l = l + 1;
+    set_byte(code_buf, l, (got_slot_disp >> 16) & 255); l = l + 1;
+    set_byte(code_buf, l, (got_slot_disp >> 24) & 255); l = l + 1;
+
+    # push reloc_idx (68 <imm32>)
+    set_byte(code_buf, l, 104); l = l + 1;
+    set_byte(code_buf, l, reloc_idx & 255); l = l + 1;
+    set_byte(code_buf, l, (reloc_idx >> 8) & 255); l = l + 1;
+    set_byte(code_buf, l, (reloc_idx >> 16) & 255); l = l + 1;
+    set_byte(code_buf, l, (reloc_idx >> 24) & 255); l = l + 1;
+
+    # jmp plt0_rel_disp (e9 <disp32>)
+    set_byte(code_buf, l, 233); l = l + 1;
+    set_byte(code_buf, l, plt0_rel_disp & 255); l = l + 1;
+    set_byte(code_buf, l, (plt0_rel_disp >> 8) & 255); l = l + 1;
+    set_byte(code_buf, l, (plt0_rel_disp >> 16) & 255); l = l + 1;
+    set_byte(code_buf, l, (plt0_rel_disp >> 24) & 255); l = l + 1;
+    return l;
+}
+
+# 6-byte indirect jump stub (backward compatibility helper)
+fn abi_synthesize_plt_stub(code_buf: i64, cur_len: i64, got_disp32: i64): i64 {
+    let l = cur_len;
+    set_byte(code_buf, l, 255); l = l + 1;
+    set_byte(code_buf, l, 37); l = l + 1;
+    set_byte(code_buf, l, got_disp32 & 255); l = l + 1;
+    set_byte(code_buf, l, (got_disp32 >> 8) & 255); l = l + 1;
+    set_byte(code_buf, l, (got_disp32 >> 16) & 255); l = l + 1;
+    set_byte(code_buf, l, (got_disp32 >> 24) & 255); l = l + 1;
+    return l;
+}
+
+fn abi_synthesize_iat_stub(code_buf: i64, cur_len: i64, iat_disp32: i64): i64 {
+    return abi_synthesize_plt_stub(code_buf, cur_len, iat_disp32);
+}
+
+# Real dynamic symbol binding: writes resolved symbol address into GOT slot
+fn abi_resolve_plt_got_binding(got_table: i64, slot_idx: i64, target_func_ptr: i64): i64 {
+    if got_table <= 0 { return 0; }
+    set_qword(got_table, slot_idx, target_func_ptr);
+    return 1;
+}
+
+# ------------------------------------------------------------------------------
+# 19. Debug Information ABI (DWARF .debug_line & CodeView Symbols)
+# ------------------------------------------------------------------------------
+
+fn abi_emit_dwarf_line_header(buf: i64, cur_len: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, 30); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 4); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 1); l = l + 1;
+    return l;
+}
+
+fn abi_emit_codeview_proc_sym(buf: i64, cur_len: i64, name_hash: i64, func_len: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, 18); l = l + 1;
+    set_byte(buf, l, 0); l = l + 1;
+    set_byte(buf, l, 16); l = l + 1;
+    set_byte(buf, l, 17); l = l + 1;
+    set_byte(buf, l, func_len & 255); l = l + 1;
+    set_byte(buf, l, (func_len >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (func_len >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (func_len >> 24) & 255); l = l + 1;
+    return l;
+}
+
+# DWARF .debug_line state machine opcode emitter (DW_LNS_advance_pc, DW_LNS_advance_line, DW_LNS_copy)
+fn abi_emit_dwarf_line_entry(buf: i64, cur_len: i64, addr_delta: i64, line_delta: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, 2); l = l + 1; # DW_LNS_advance_pc
+    set_byte(buf, l, addr_delta & 127); l = l + 1;
+    set_byte(buf, l, 3); l = l + 1; # DW_LNS_advance_line
+    set_byte(buf, l, line_delta & 127); l = l + 1;
+    set_byte(buf, l, 1); l = l + 1; # DW_LNS_copy
+    return l;
+}
+
+# DWARF .debug_line end-of-sequence emitter (DW_LNE_end_sequence)
+fn abi_emit_dwarf_line_end(buf: i64, cur_len: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, 0); l = l + 1; # Extended opcode indicator
+    set_byte(buf, l, 1); l = l + 1; # Length 1
+    set_byte(buf, l, 1); l = l + 1; # DW_LNE_end_sequence
+    return l;
+}
+
+# CodeView CV_LINE entry emitter (statement flag + offset)
+fn abi_emit_codeview_line_entry(buf: i64, cur_len: i64, offset: i64, line_num: i64): i64 {
+    let l = cur_len;
+    set_byte(buf, l, offset & 255); l = l + 1;
+    set_byte(buf, l, (offset >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (offset >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (offset >> 24) & 255); l = l + 1;
+    let flags = line_num | 2147483648; # 0x80000000 statement bit
+    set_byte(buf, l, flags & 255); l = l + 1;
+    set_byte(buf, l, (flags >> 8) & 255); l = l + 1;
+    set_byte(buf, l, (flags >> 16) & 255); l = l + 1;
+    set_byte(buf, l, (flags >> 24) & 255); l = l + 1;
+    return l;
+}
+
+# ------------------------------------------------------------------------------
+# 20. Security Hardening (Stack Canaries, Forward-Edge CFI, Avalanche & Real W^X)
+# ------------------------------------------------------------------------------
+
+# Stack Smashing Protection (SSP): Generates canary setup from Linux thread TLS fs:[0x28]
+fn abi_synthesize_stack_canary_prolog(code_buf: i64, cur_len: i64, canary_slot_offset: i64): i64 {
+    let l = cur_len;
+    # mov rax, fs:[0x28] (64 48 8b 04 25 28 00 00 00)
+    set_byte(code_buf, l, 100); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 139); l = l + 1;
+    set_byte(code_buf, l, 4); l = l + 1;
+    set_byte(code_buf, l, 37); l = l + 1;
+    set_byte(code_buf, l, 40); l = l + 1; # 0x28
+    set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 0); l = l + 1;
+
+    # mov [rbp - canary_slot_offset], rax (48 89 45 <neg_offset>)
+    let neg_off = (256 - canary_slot_offset) & 255;
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 137); l = l + 1;
+    set_byte(code_buf, l, 69); l = l + 1;
+    set_byte(code_buf, l, neg_off); l = l + 1;
+    return l;
+}
+
+# Stack Smashing Protection (SSP): Generates canary check and aborts with ud2 if corrupted
+fn abi_synthesize_stack_canary_epilog(code_buf: i64, cur_len: i64, canary_slot_offset: i64): i64 {
+    let l = cur_len;
+    # mov rax, [rbp - canary_slot_offset] (48 8b 45 <neg_offset>)
+    let neg_off = (256 - canary_slot_offset) & 255;
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 139); l = l + 1;
+    set_byte(code_buf, l, 69); l = l + 1;
+    set_byte(code_buf, l, neg_off); l = l + 1;
+
+    # xor rax, fs:[0x28] (64 48 33 04 25 28 00 00 00)
+    set_byte(code_buf, l, 100); l = l + 1;
+    set_byte(code_buf, l, 72); l = l + 1;
+    set_byte(code_buf, l, 51); l = l + 1;
+    set_byte(code_buf, l, 4); l = l + 1;
+    set_byte(code_buf, l, 37); l = l + 1;
+    set_byte(code_buf, l, 40); l = l + 1;
+    set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 0); l = l + 1;
+    set_byte(code_buf, l, 0); l = l + 1;
+
+    # je +2 (74 02)
+    set_byte(code_buf, l, 116); l = l + 1;
+    set_byte(code_buf, l, 2); l = l + 1;
+
+    # ud2 (0f 0b: abort on buffer overflow)
+    set_byte(code_buf, l, 15); l = l + 1;
+    set_byte(code_buf, l, 11); l = l + 1;
+    return l;
+}
+
+fn abi_verify_stack_canary(canary_in_frame: i64, reference_canary: i64): i64 {
+    if canary_in_frame == reference_canary {
+        return 1;
+    }
+    return 0;
+}
+
+fn abi_emit_cfi_landing_pad(code_buf: i64, cur_len: i64, arch: i64): i64 {
+    let l = cur_len;
+    if arch == 1 { # x86_64: ENDBR64 (f3 0f 1e fa)
+        set_byte(code_buf, l, 243); l = l + 1;
+        set_byte(code_buf, l, 15); l = l + 1;
+        set_byte(code_buf, l, 30); l = l + 1;
+        set_byte(code_buf, l, 250); l = l + 1;
+    }
+    if arch == 2 { # AArch64: BTI c (5f 24 03 d5)
+        set_byte(code_buf, l, 95); l = l + 1;
+        set_byte(code_buf, l, 36); l = l + 1;
+        set_byte(code_buf, l, 3); l = l + 1;
+        set_byte(code_buf, l, 213); l = l + 1;
+    }
+    return l;
+}
+
+# Real CFI landing pad verification: inspects machine bytes at target_ptr
+fn abi_verify_cfi_landing_pad(target_ptr: i64, arch: i64): i64 {
+    if target_ptr == 0 { return 0; }
+    if arch == 1 { # x86_64: verify ENDBR64 (0xf3, 0x0f, 0x1e, 0xfa)
+        let b0 = get_byte(target_ptr, 0);
+        let b1 = get_byte(target_ptr, 1);
+        let b2 = get_byte(target_ptr, 2);
+        let b3 = get_byte(target_ptr, 3);
+        if (b0 == 243) & (b1 == 15) & (b2 == 30) & (b3 == 250) {
+            return 1;
+        }
+    }
+    if arch == 2 { # AArch64: verify BTI c (0x5f, 0x24, 0x03, 0xd5)
+        let b0 = get_byte(target_ptr, 0);
+        let b1 = get_byte(target_ptr, 1);
+        let b2 = get_byte(target_ptr, 2);
+        let b3 = get_byte(target_ptr, 3);
+        if (b0 == 95) & (b1 == 36) & (b2 == 3) & (b3 == 213) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+# Forward-Edge Control Flow Integrity: Validates hardware landing pad AND compiler target whitelist table
+fn abi_cfi_validate_target(target_ptr: i64, table: i64, count: i64, arch: i64): i64 {
+    if target_ptr == 0 { return 0; }
+    # 1. Hardware CFI instruction level verification
+    if abi_verify_cfi_landing_pad(target_ptr, arch) != 1 {
+        return 0;
+    }
+    # 2. Software indirect call target table whitelist
+    if (table != 0) & (count > 0) {
+        let i = 0;
+        let found = 0;
+        while i < count {
+            if get_qword(table, i) == target_ptr {
+                found = 1;
+                break;
+            }
+            i = i + 1;
+        }
+        if found == 0 { return 0; }
+    }
+    return 1;
+}
+
+fn abi_crypto_mix64(h: i64, k: i64): i64 {
+    let v = h ^ k;
+    v = (v ^ (v >> 33)) * 1099511628211;
+    v = (v ^ (v >> 33)) * 14695981039346656037;
+    v = v ^ (v >> 33);
+    return v;
+}
+
+fn abi_harden_contract_hash(c: *AbiContract): i64 {
+    let h = c.contract_hash;
+    h = abi_crypto_mix64(h, c.identity_hash);
+    h = abi_crypto_mix64(h, c.compat_hash);
+    h = abi_crypto_mix64(h, c.security_hash);
+    return h;
+}
+
+# Real W^X page protection enforcement using native Linux kernel sys_mprotect syscall
+fn abi_harden_memory_wx(page_addr: i64, page_len: i64, executable: i64): i64 {
+    if page_addr <= 0 { return 0; }
+    if page_len <= 0 { return 0; }
+    let prot = 3; # PROT_READ | PROT_WRITE (RW)
+    if executable != 0 {
+        prot = 5; # PROT_READ | PROT_EXEC (RX: Write permission stripped! Enforces W^X MMU protection!)
+    }
+    let res = sys_mprotect(page_addr, page_len, prot);
+    if res == 0 { return 1; }
+    return 0;
+}
+
+

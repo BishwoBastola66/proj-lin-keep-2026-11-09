@@ -1,0 +1,194 @@
+# ==============================================================================
+# Webbix REX Bridge — Web IR to REX Runtime Lowering (webbix/rex/rex_bridge.bix)
+# Lowers native Web IR into REX execution instructions and DOM mutation records.
+# Connects the Rubix execution engine to the browser host environment.
+# Zero HTML/CSS serialization in the primary pipeline.
+# ==============================================================================
+
+include "../ir/builder.bix";
+include "../../rubix/std/web.bix";
+
+# ------------------------------------------------------------------------------
+# REX Web Instruction Opcodes
+# ------------------------------------------------------------------------------
+let REX_WEB_OP_CREATE_NODE      = 1;
+let REX_WEB_OP_APPEND_CHILD     = 2;
+let REX_WEB_OP_SET_TEXT         = 3;
+let REX_WEB_OP_APPLY_STYLE      = 4;
+let REX_WEB_OP_ATTACH_LISTENER  = 5;
+let REX_WEB_OP_BIND_STATE       = 6;
+let REX_WEB_OP_DISPATCH_EVENT   = 7;
+let REX_WEB_OP_COMMIT_MUTATION  = 8;
+let REX_WEB_OP_SET_ANIMATION    = 9;
+
+struct RexWebInstruction {
+    opcode: i64,
+    node_id: i64,
+    parent_id: i64,
+    param1: i64,
+    param2: i64
+}
+
+fn rex_web_instruction_init(
+    inst: *RexWebInstruction,
+    opcode: i64,
+    node_id: i64,
+    parent_id: i64,
+    param1: i64,
+    param2: i64
+): void {
+    inst.opcode = opcode;
+    inst.node_id = node_id;
+    inst.parent_id = parent_id;
+    inst.param1 = param1;
+    inst.param2 = param2;
+}
+
+# ------------------------------------------------------------------------------
+# Web IR -> REX Web Instruction Compiler
+# ------------------------------------------------------------------------------
+
+fn rex_compile_web_app(
+    app: *WebApp,
+    out_instructions: *RexWebInstruction,
+    max_insts: i64
+): i64 {
+    let inst_count = 0;
+
+    let i = 0;
+    while (i < app.node_count) & (inst_count < max_insts) {
+        # 1. Emit REX_WEB_OP_CREATE_NODE (node_id, parent_id, kind)
+        out_instructions[inst_count].opcode = REX_WEB_OP_CREATE_NODE;
+        out_instructions[inst_count].node_id = app.nodes[i].id;
+        out_instructions[inst_count].parent_id = app.nodes[i].parent_id;
+        out_instructions[inst_count].param1 = app.nodes[i].kind;
+        out_instructions[inst_count].param2 = 0;
+        inst_count = inst_count + 1;
+
+        # 2. Emit REX_WEB_OP_BIND_STATE if bound
+        if (app.nodes[i].state_binding > 0) & (inst_count < max_insts) {
+            out_instructions[inst_count].opcode = REX_WEB_OP_BIND_STATE;
+            out_instructions[inst_count].node_id = app.nodes[i].id;
+            out_instructions[inst_count].parent_id = app.nodes[i].parent_id;
+            out_instructions[inst_count].param1 = app.nodes[i].state_binding;
+            out_instructions[inst_count].param2 = app.nodes[i].state_value;
+            inst_count = inst_count + 1;
+        }
+
+        # 3. Emit REX_WEB_OP_ATTACH_LISTENER if event attached
+        if (app.nodes[i].event.event_kind != WebEventKind.None) & (inst_count < max_insts) {
+            out_instructions[inst_count].opcode = REX_WEB_OP_ATTACH_LISTENER;
+            out_instructions[inst_count].node_id = app.nodes[i].id;
+            out_instructions[inst_count].parent_id = app.nodes[i].parent_id;
+            out_instructions[inst_count].param1 = app.nodes[i].event.event_kind;
+            out_instructions[inst_count].param2 = app.nodes[i].event.action_kind;
+            inst_count = inst_count + 1;
+        }
+
+        # 4. Emit REX_WEB_OP_SET_ANIMATION if animation present
+        if (app.nodes[i].style.animation != WebAnimation.None) & (inst_count < max_insts) {
+            out_instructions[inst_count].opcode = REX_WEB_OP_SET_ANIMATION;
+            out_instructions[inst_count].node_id = app.nodes[i].id;
+            out_instructions[inst_count].parent_id = app.nodes[i].style.animation;
+            out_instructions[inst_count].param1 = 300;
+            out_instructions[inst_count].param2 = 0;
+            inst_count = inst_count + 1;
+        }
+
+        i = i + 1;
+    }
+
+    # Final commit mutation instruction
+    if inst_count < max_insts {
+        out_instructions[inst_count].opcode = REX_WEB_OP_COMMIT_MUTATION;
+        out_instructions[inst_count].node_id = 0;
+        out_instructions[inst_count].parent_id = 0;
+        out_instructions[inst_count].param1 = inst_count;
+        out_instructions[inst_count].param2 = 0;
+        inst_count = inst_count + 1;
+    }
+
+    return inst_count;
+}
+
+# ------------------------------------------------------------------------------
+# REX Event Dispatcher & State Mutator
+# ------------------------------------------------------------------------------
+
+fn rex_dispatch_ui_event(app: *WebApp, target_node_id: i64, event_kind: i64): i64 {
+    if (target_node_id < 0) | (target_node_id >= app.node_count) {
+        return 0;
+    }
+
+    if app.nodes[target_node_id].event.event_kind != event_kind {
+        return 0;
+    }
+
+    if app.nodes[target_node_id].event.action_kind == WebActionKind.IncrementState {
+        let nxt = web_app_increment_state(app, app.nodes[target_node_id].event.target_state_key);
+        web_app_evaluate_bindings(app);
+        return nxt;
+    }
+
+    if app.nodes[target_node_id].event.action_kind == WebActionKind.DecrementState {
+        let nxt = web_app_decrement_state(app, app.nodes[target_node_id].event.target_state_key);
+        web_app_evaluate_bindings(app);
+        return nxt;
+    }
+
+    if app.nodes[target_node_id].event.action_kind == WebActionKind.ToggleState {
+        let nxt = web_app_toggle_state(app, app.nodes[target_node_id].event.target_state_key);
+        web_app_evaluate_bindings(app);
+        return nxt;
+    }
+
+    if app.nodes[target_node_id].event.action_kind == WebActionKind.SetState {
+        web_app_set_state(app, app.nodes[target_node_id].event.target_state_key, app.nodes[target_node_id].event.payload_val);
+        web_app_evaluate_bindings(app);
+        return app.nodes[target_node_id].event.payload_val;
+    }
+
+    return 1;
+}
+
+# ------------------------------------------------------------------------------
+# DOM Mutation Record Bridge (std/web.bix compatibility)
+# ------------------------------------------------------------------------------
+
+fn rex_web_app_to_dom_mutations(
+    app: *WebApp,
+    out_mutations: *DomMutationRecord,
+    max_muts: i64
+): i64 {
+    let mut_count = 0;
+    let i = 0;
+    while (i < app.node_count) & (mut_count < max_muts) {
+        let tag_id = 1; # div
+
+        if app.nodes[i].kind == WebKind.Nav          { tag_id = 8; } # nav
+        if app.nodes[i].kind == WebKind.Hero         { tag_id = 7; } # section
+        if app.nodes[i].kind == WebKind.Header       { tag_id = 8; } # header
+        if app.nodes[i].kind == WebKind.Main         { tag_id = 9; } # main
+        if app.nodes[i].kind == WebKind.Title        { tag_id = 3; } # h1
+        if app.nodes[i].kind == WebKind.Heading      { tag_id = 3; } # h*
+        if app.nodes[i].kind == WebKind.Text         { tag_id = 2; } # span
+        if app.nodes[i].kind == WebKind.Paragraph    { tag_id = 4; } # p
+        if app.nodes[i].kind == WebKind.Button       { tag_id = 5; } # button
+        if app.nodes[i].kind == WebKind.Input        { tag_id = 6; } # input
+        if app.nodes[i].kind == WebKind.Badge        { tag_id = 2; } # span
+        if app.nodes[i].kind == WebKind.Section      { tag_id = 7; } # section
+        if app.nodes[i].kind == WebKind.Article      { tag_id = 7; } # article
+        if app.nodes[i].kind == WebKind.Footer       { tag_id = 1; } # footer (div)
+        if app.nodes[i].kind == WebKind.List         { tag_id = 10; } # ul
+        if app.nodes[i].kind == WebKind.ListItem     { tag_id = 11; } # li
+
+        out_mutations[mut_count].op = DOM_MUT_CREATE_ELEMENT;
+        out_mutations[mut_count].target_id = app.nodes[i].id + 1;
+        out_mutations[mut_count].param1 = tag_id;
+        out_mutations[mut_count].param2 = app.nodes[i].parent_id + 1;
+        mut_count = mut_count + 1;
+
+        i = i + 1;
+    }
+    return mut_count;
+}

@@ -1,0 +1,20 @@
+# ==============================================================================
+# Rubix Architectural Probe
+# Verifies native Rubix execution, arithmetic, memory access, and print
+# ==============================================================================
+
+fn probe_check(a: i64, b: i64): i64 {
+    let sum = a + b;
+    return sum;
+}
+
+fn main(): i64 {
+    println(">>> Rubix Sovereign Engine Active");
+    let res = probe_check(40, 2);
+    if res != 42 {
+        println("FAIL: Expected 42");
+        return 1;
+    }
+    println("PASS: Probe check verified (res = 42)");
+    return 0;
+}

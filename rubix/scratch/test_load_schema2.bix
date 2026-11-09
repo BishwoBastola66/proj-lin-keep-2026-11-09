@@ -1,0 +1,28 @@
+use compiler.main;
+
+fn main(): i64 {
+    let p = sys_mmap(0, 64, 3, 34, -1, 0);
+    set_byte(p, 0, 97); set_byte(p, 1, 99); set_byte(p, 2, 99); # "account_v2.bin"
+    set_byte(p, 3, 111); set_byte(p, 4, 117); set_byte(p, 5, 110);
+    set_byte(p, 6, 116); set_byte(p, 7, 95); set_byte(p, 8, 118);
+    set_byte(p, 9, 50); set_byte(p, 10, 46); set_byte(p, 11, 98);
+    set_byte(p, 12, 105); set_byte(p, 13, 110); set_byte(p, 14, 0);
+
+    let s = eia_load_schema(p);
+    println("s:");
+    print(s);
+    println("");
+    let count = get_qword(s, 0);
+    println("count:");
+    print(count);
+    println("");
+    let sname = get_qword(s, 1);
+    println("sname:");
+    print(sname);
+    println("");
+    let fcount = get_qword(s, 2);
+    println("fcount:");
+    print(fcount);
+    println("");
+    return 0;
+}

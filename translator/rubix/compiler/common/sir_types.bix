@@ -1,0 +1,107 @@
+# ==============================================================================
+# Rubix — Semantic Intermediate Representation (SIR) Types
+# File: compiler/common/sir_types.bix
+#
+# Foundations of the Rubix Unified Type System:
+#   - Unboxed Primitives (i64, i32, u8, f64, f32, bool, char)
+#   - Value Slices & Records
+#   - Affine Resource Handles (Single-Owner, Deterministic Finalization)
+#   - Capability Tokens (Unforgeable System Access Permissions)
+#   - Function Signatures with Effect Sets
+# ==============================================================================
+
+# --- Primitive Value Types (Copy Semantics) ---
+let SIR_TYPE_NONE    = 0;
+let SIR_TYPE_I64     = 1;
+let SIR_TYPE_I32     = 2;
+let SIR_TYPE_U8      = 3;
+let SIR_TYPE_BOOL    = 4;
+let SIR_TYPE_PTR     = 5;
+let SIR_TYPE_STR     = 6;
+let SIR_TYPE_VOID    = 7;
+let SIR_TYPE_CHAR    = 8;
+let SIR_TYPE_F64     = 9;
+let SIR_TYPE_F32     = 10;
+
+# --- Compound & Algebraic Types ---
+let SIR_TYPE_ARRAY   = 16;
+let SIR_TYPE_STRUCT  = 17;
+let SIR_TYPE_ENUM    = 18;
+let SIR_TYPE_OPTION  = 19;
+let SIR_TYPE_RESULT  = 20;
+
+# --- Resource & Affine Types (Single-Owner Move Semantics) ---
+let SIR_TYPE_AFFINE_HANDLE = 32;
+let SIR_TYPE_REGION_ARENA  = 33;
+let SIR_TYPE_BORROW_REF    = 34;
+let SIR_TYPE_BORROW_MUT    = 35;
+
+# --- Capability Types (Linear Security Witness Tokens) ---
+let SIR_TYPE_CAP_FS        = 48;
+let SIR_TYPE_CAP_NET       = 49;
+let SIR_TYPE_CAP_PROC      = 50;
+let SIR_TYPE_CAP_UNSAFE    = 51;
+let SIR_TYPE_CAP_TIME      = 52;
+let SIR_TYPE_CAP_RANDOM    = 53;
+
+# --- Type Size Query ---
+fn sir_type_size(ty: i64): i64 {
+    if ty == SIR_TYPE_I64     { return 8; }
+    if ty == SIR_TYPE_F64     { return 8; }
+    if ty == SIR_TYPE_PTR     { return 8; }
+    if ty == SIR_TYPE_STR     { return 8; }
+    if ty == SIR_TYPE_AFFINE_HANDLE { return 8; }
+    if ty == SIR_TYPE_REGION_ARENA  { return 8; }
+    if ty == SIR_TYPE_BORROW_REF    { return 8; }
+    if ty == SIR_TYPE_BORROW_MUT    { return 8; }
+    if ty == SIR_TYPE_CAP_FS        { return 8; }
+    if ty == SIR_TYPE_CAP_NET       { return 8; }
+    if ty == SIR_TYPE_CAP_PROC      { return 8; }
+    if ty == SIR_TYPE_CAP_UNSAFE    { return 8; }
+    if ty == SIR_TYPE_I32     { return 4; }
+    if ty == SIR_TYPE_F32     { return 4; }
+    if ty == SIR_TYPE_CHAR    { return 4; }
+    if ty == SIR_TYPE_U8      { return 1; }
+    if ty == SIR_TYPE_BOOL    { return 1; }
+    if ty == SIR_TYPE_VOID    { return 0; }
+    return 8;
+}
+
+# --- Type Classification Queries ---
+fn sir_type_is_copy(ty: i64): i64 {
+    if (ty >= SIR_TYPE_I64) & (ty <= SIR_TYPE_CHAR) { return 1; }
+    if (ty == SIR_TYPE_F64) | (ty == SIR_TYPE_F32) { return 1; }
+    return 0;
+}
+
+fn sir_type_is_resource(ty: i64): i64 {
+    if (ty >= SIR_TYPE_AFFINE_HANDLE) & (ty <= SIR_TYPE_BORROW_MUT) { return 1; }
+    return 0;
+}
+
+fn sir_type_is_capability(ty: i64): i64 {
+    if (ty >= SIR_TYPE_CAP_FS) & (ty <= SIR_TYPE_CAP_RANDOM) { return 1; }
+    return 0;
+}
+
+fn sir_type_name(ty: i64): str {
+    if ty == SIR_TYPE_I64     { return "i64"; }
+    if ty == SIR_TYPE_I32     { return "i32"; }
+    if ty == SIR_TYPE_U8      { return "u8"; }
+    if ty == SIR_TYPE_BOOL    { return "bool"; }
+    if ty == SIR_TYPE_PTR     { return "ptr"; }
+    if ty == SIR_TYPE_STR     { return "str"; }
+    if ty == SIR_TYPE_VOID    { return "void"; }
+    if ty == SIR_TYPE_CHAR    { return "char"; }
+    if ty == SIR_TYPE_F64     { return "f64"; }
+    if ty == SIR_TYPE_F32     { return "f32"; }
+    if ty == SIR_TYPE_AFFINE_HANDLE { return "affine_handle"; }
+    if ty == SIR_TYPE_REGION_ARENA  { return "region_arena"; }
+    if ty == SIR_TYPE_BORROW_REF    { return "&borrow"; }
+    if ty == SIR_TYPE_BORROW_MUT    { return "&mut borrow"; }
+    if ty == SIR_TYPE_CAP_FS        { return "CapFs"; }
+    if ty == SIR_TYPE_CAP_NET       { return "CapNet"; }
+    if ty == SIR_TYPE_CAP_PROC      { return "CapProc"; }
+    if ty == SIR_TYPE_CAP_UNSAFE    { return "CapUnsafe"; }
+    return "unknown";
+}

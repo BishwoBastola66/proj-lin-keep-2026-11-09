@@ -1,0 +1,99 @@
+# ==============================================================================
+# Webbix Declarative UI Engine Verification Test
+# File: webbix/tests/test_declarative_ui.bix
+#
+# Proves:
+#   1. Zero node IDs or parent IDs in user code.
+#   2. Named reactive state store (zero state slot constants).
+#   3. Automatic container nesting (Stats, Grid, Section, Card).
+#   4. End-to-end REX event dispatch and reactive state propagation.
+#   5. High-Level App API: zero WebApp/Ui/server boilerplate in application code.
+# ==============================================================================
+
+include "../webbix.bix";
+
+fn test_high_level_app(): i64 {
+    # 1. High-Level App initialization (Framework owns WebApp, Ui, Server)
+    let app = App("High-Level Sweet Webbix App");
+
+    # 2. Named Reactive State (Zero numeric slot IDs)
+    State(app, "views", 1250);
+    State(app, "stars", 420);
+
+    # 3. Declarative Page & Component Composition (Zero parent IDs, Zero node IDs)
+    Page(app, "/", "Home");
+        Navbar(app, "Ryumi", "Webbix", "Systems", "#sys", "Architecture", "#arch");
+        Hero(app, "High-Performance Systems", "Architecting Native Web Systems", "Creator of Webbix", "Explore", "#projects");
+        Button(app, "★ Star", "stars");
+
+        Stats(app);
+            StatReactive(app, "Live Views", "views");
+            StatMetric(app, "Latency", "< 1.2 us");
+            StatMetric(app, "Regressions Clean", "91 / 91");
+        End(app);
+
+        Section(app, "Systems Portfolio", "Native Rubix Infrastructure");
+            Grid(app, 2);
+                ProjectCard(app, "Web Framework", "Webbix", "Zero HTML, 100% native.", "Pure Rubix", "TCP");
+                ProjectCard(app, "Compiler", "Rubix Compiler", "Self-bootstrapping.", "Self-Hosted", "x86-64");
+            End(app);
+        End(app);
+
+        BadgeCard(app, "Architecture", "x86-64", "Linux Syscalls", "Sockets", "mmap", "W^X");
+        Footer(app, "Built natively with Webbix & Rubix.");
+    End(app);
+
+    # 4. Verify Web IR construction
+    if app.web_app.node_count <= 10 { return 1; }
+    if StateGet(app, "views") != 1250 { return 2; }
+    if StateGet(app, "stars") != 420 { return 3; }
+
+    # 5. Simulate Interactive User Clicks via REX Engine
+    let btn_id = -1;
+    let i = 0;
+    while i < app.web_app.node_count {
+        if (app.web_app.nodes[i].kind == WebKind.Button) & (app.web_app.nodes[i].event.event_kind == WebEventKind.Click) {
+            btn_id = app.web_app.nodes[i].id;
+        }
+        i = i + 1;
+    }
+    if btn_id < 0 { return 4; }
+
+    # User clicks star button three times: 420 -> 421 -> 422 -> 423
+    DispatchClick(app, btn_id);
+    DispatchClick(app, btn_id);
+    DispatchClick(app, btn_id);
+    StateInc(app, "views"); # 1250 -> 1251
+
+    # Verify reactive state propagation
+    if StateGet(app, "stars") != 423 { return 5; }
+    if StateGet(app, "views") != 1251 { return 6; }
+
+    # 6. Verify native build and REX lowering
+    let b_res = Build(app);
+    if b_res != 42 { return 7; }
+
+    return 42;
+}
+
+fn test_layer3_ui_engine(): i64 {
+    let app: WebApp;
+    let ui: Ui;
+    ui_init(&ui, &app, "Layer 3 Test");
+
+    ui_state(&ui, "counter", 10);
+    UiPage(&ui, "/test", "Layer 3 Page");
+        UiTitle(&ui, "Layer 3 Title");
+        UiButton(&ui, "Click", "counter");
+    UiEnd(&ui);
+
+    if app.node_count != 3 { return 8; }
+    if ui_get_state(&ui, "counter") != 10 { return 9; }
+    return 42;
+}
+
+fn main(): i64 {
+    if test_high_level_app() != 42 { return 1; }
+    if test_layer3_ui_engine() != 42 { return 2; }
+    return 42;
+}

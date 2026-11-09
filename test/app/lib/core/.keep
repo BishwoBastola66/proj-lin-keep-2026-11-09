@@ -1,0 +1,2 @@
+// The core directory contains foundational code shared across all features.
+// Examples: theme definitions, error handling, network interceptors.

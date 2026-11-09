@@ -1,0 +1,211 @@
+# ==============================================================================
+# Rubix Standard Library: Process Concurrency & Shared Memory (std/proc.bix)
+# ==============================================================================
+# Real multi-core parallelism using Linux shared-memory channels and process
+# execution primitives (Phase 1 / Shortcut B of Rubix AI-Native Strategy).
+#
+# ARCHITECTURE:
+# Instead of relying on sequential thread stubs, this module leverages zero-copy
+# POSIX shared memory (sys_mmap with MAP_SHARED | MAP_ANONYMOUS).
+# Workers access the shared address space concurrently to compute partitioned
+# tensor operations (e.g. tile-sliced matrix multiplications) without memory copies.
+# ==============================================================================
+
+let PROC_MAP_SHARED = 1;
+let PROC_MAP_ANON   = 32;
+let PROC_PROT_RW    = 3;
+
+# Shared Memory Layout Offsets:
+# [0..7]   = total workers
+# [8..15]  = global task counter / task ID
+# [16..23] = completion flags bitmask
+# [24..31] = lock / barrier word
+# [64..]   = worker slot states (each worker slot = 16 bytes: [status, result_code])
+let SHM_OFF_NUM_WORKERS  = 0;
+let SHM_OFF_TASK_ID      = 8;
+let SHM_OFF_COMPLETION   = 16;
+let SHM_OFF_BARRIER      = 24;
+let SHM_OFF_WORKER_BASE  = 64;
+
+let WORKER_STATUS_IDLE   = 0;
+let WORKER_STATUS_BUSY   = 1;
+let WORKER_STATUS_DONE   = 2;
+let WORKER_STATUS_ERROR  = 3;
+
+# --- Hardware Atomics and Memory Fence ---
+
+fn atomic_add(target_addr: i64, delta: i64): i64 {
+    let p = sys_mmap(0, 4096, 7, 34, -1, 0); # PROT_RWX, MAP_PRIVATE|ANON
+    
+    # Offset 0: atomic_add (LOCK XADD)
+    set_byte(p, 0, 72); set_byte(p, 1, 139); set_byte(p, 2, 22);
+    set_byte(p, 3, 72); set_byte(p, 4, 139); set_byte(p, 5, 78); set_byte(p, 6, 8);
+    set_byte(p, 7, 240); set_byte(p, 8, 72); set_byte(p, 9, 15); set_byte(p, 10, 193); set_byte(p, 11, 10);
+    set_byte(p, 12, 72); set_byte(p, 13, 137); set_byte(p, 14, 200);
+    set_byte(p, 15, 195);
+
+    let args = alloc_buffer(16) as *i64;
+    args[0] = target_addr;
+    args[1] = delta;
+    let old = sys_call_code_args(p, 0, args as ptr);
+    free_buffer(args as ptr, 16);
+    sys_call_code(p); # keep clean
+    return old;
+}
+
+fn atomic_cas(target_addr: i64, expected: i64, new_val: i64): i64 {
+    let p = sys_mmap(0, 4096, 7, 34, -1, 0);
+    
+    # Offset 0: atomic_cas (LOCK CMPXCHG)
+    set_byte(p, 0, 72); set_byte(p, 1, 139); set_byte(p, 2, 22);
+    set_byte(p, 3, 72); set_byte(p, 4, 139); set_byte(p, 5, 70); set_byte(p, 6, 8);
+    set_byte(p, 7, 72); set_byte(p, 8, 139); set_byte(p, 9, 78); set_byte(p, 10, 16);
+    set_byte(p, 11, 240); set_byte(p, 12, 72); set_byte(p, 13, 15); set_byte(p, 14, 177); set_byte(p, 15, 10);
+    set_byte(p, 16, 195);
+
+    let args = alloc_buffer(24) as *i64;
+    args[0] = target_addr;
+    args[1] = expected;
+    args[2] = new_val;
+    let old = sys_call_code_args(p, 0, args as ptr);
+    free_buffer(args as ptr, 24);
+    return old;
+}
+
+fn atomic_fence(): void {
+    let p = sys_mmap(0, 4096, 7, 34, -1, 0);
+    set_byte(p, 0, 15); set_byte(p, 1, 174); set_byte(p, 2, 240); # mfence
+    set_byte(p, 3, 195); # ret
+    sys_call_code(p);
+}
+
+# --- Shared Memory Channel Creation & Barrier ---
+
+fn shm_create(size_bytes: i64): i64 {
+    return sys_mmap(0, size_bytes, PROC_PROT_RW, PROC_MAP_SHARED + PROC_MAP_ANON, -1, 0);
+}
+
+fn proc_barrier_arrive(shm: i64): i64 {
+    atomic_fence();
+    return atomic_add(shm + SHM_OFF_BARRIER, 1);
+}
+
+fn proc_barrier_wait(shm: i64, target_count: i64): void {
+    while get_qword(shm, SHM_OFF_BARRIER) < target_count {
+        # spin wait for barrier
+    }
+    atomic_fence();
+}
+
+fn shm_init_channel(shm: i64, num_workers: i64): void {
+    set_qword(shm, SHM_OFF_NUM_WORKERS, num_workers);
+    set_qword(shm, SHM_OFF_TASK_ID, 0);
+    set_qword(shm, SHM_OFF_COMPLETION, 0);
+    set_qword(shm, SHM_OFF_BARRIER, 0);
+
+    let i = 0;
+    while i < num_workers {
+        let slot = shm + SHM_OFF_WORKER_BASE + (i * 16);
+        set_qword(slot, 0, WORKER_STATUS_IDLE);
+        set_qword(slot, 8, 0);
+        i = i + 1;
+    }
+}
+
+# --- Worker Coordination ---
+
+fn proc_set_worker_status(shm: i64, worker_id: i64, status: i64): void {
+    let slot = shm + SHM_OFF_WORKER_BASE + (worker_id * 16);
+    set_qword(slot, 0, status);
+}
+
+fn proc_get_worker_status(shm: i64, worker_id: i64): i64 {
+    let slot = shm + SHM_OFF_WORKER_BASE + (worker_id * 16);
+    return get_qword(slot, 0);
+}
+
+fn proc_set_worker_result(shm: i64, worker_id: i64, result: i64): void {
+    let slot = shm + SHM_OFF_WORKER_BASE + (worker_id * 16);
+    set_qword(slot, 8, result);
+}
+
+fn proc_get_worker_result(shm: i64, worker_id: i64): i64 {
+    let slot = shm + SHM_OFF_WORKER_BASE + (worker_id * 16);
+    return get_qword(slot, 8);
+}
+
+fn proc_all_workers_done(shm: i64, num_workers: i64): i64 {
+    let i = 0;
+    while i < num_workers {
+        let st = proc_get_worker_status(shm, i);
+        if st != WORKER_STATUS_DONE {
+            return 0;
+        }
+        i = i + 1;
+    }
+    return 1;
+}
+
+# --- Row Tiling / Work Partitioning ---
+
+fn proc_tile_start(total_rows: i64, worker_id: i64, num_workers: i64): i64 {
+    if num_workers <= 1 { return 0; }
+    let chunk = total_rows / num_workers;
+    return worker_id * chunk;
+}
+
+fn proc_tile_end(total_rows: i64, worker_id: i64, num_workers: i64): i64 {
+    if num_workers <= 1 { return total_rows; }
+    if worker_id == (num_workers - 1) {
+        return total_rows;
+    }
+    let chunk = total_rows / num_workers;
+    return (worker_id + 1) * chunk;
+}
+
+# --- Parallel MatMul Tile Execution ---
+
+# Sliced int8 matmul over assigned rows [start_row..end_row)
+fn proc_parallel_matmul_slice(a: i64, b: i64, c: i64, start_row: i64, end_row: i64, scale: i64): void {
+    let cols_a = get_qword(a, 24); # dim1 of A = K
+    let cols_b = get_qword(b, 24); # dim1 of B = N
+
+    let i = start_row;
+    while i < end_row {
+        let j = 0;
+        while j < cols_b {
+            let acc = 0;
+            let k = 0;
+            while k < cols_a {
+                let off_a = 64 + (i * cols_a) + k;
+                let va = get_byte(a, off_a);
+                if va >= 128 { va = va - 256; }
+
+                let off_b = 64 + (k * cols_b) + j;
+                let vb = get_byte(b, off_b);
+                if vb >= 128 { vb = vb - 256; }
+
+                acc = acc + (va * vb);
+                k = k + 1;
+            }
+            let scaled = (acc * scale) / 256;
+            if scaled > 127 { scaled = 127; }
+            if scaled < -128 { scaled = -128; }
+
+            let out_b = scaled;
+            if out_b < 0 { out_b = out_b + 256; }
+            let off_c = 64 + (i * cols_b) + j;
+            set_byte(c, off_c, out_b);
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+# Worker dispatch entrypoint for a single worker partition
+fn proc_parallel_matmul_dispatch(a: i64, b: i64, c: i64, worker_id: i64, num_workers: i64, scale: i64): void {
+    let total_m = get_qword(a, 16); # dim0 of A = M
+    let r_start = proc_tile_start(total_m, worker_id, num_workers);
+    let r_end = proc_tile_end(total_m, worker_id, num_workers);
+    proc_parallel_matmul_slice(a, b, c, r_start, r_end, scale);
+}

@@ -1,0 +1,33 @@
+# ==============================================================================
+# Rubix Control Style (RCS) - Game Badge & Reactive State
+# Triggers on state changes and click feedback
+# ==============================================================================
+
+badge {
+    bg: var(--accent);
+    color: white;
+    radius: pill;
+    padding: 8px 16px;
+    weight: bold;
+    spin slow once;
+}
+
+badge:hover {
+    glow accent on hover;
+    pop;
+}
+
+button.level-up {
+    bg: var(--success);
+    color: white;
+    radius: md;
+    bounce springy on click;
+}
+
+.high-score when score > 100 {
+    pulse accent forever;
+}
+
+.champion when score > 1000 {
+    spin slow forever;
+}

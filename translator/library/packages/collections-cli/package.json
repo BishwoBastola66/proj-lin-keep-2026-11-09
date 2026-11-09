@@ -1,0 +1,21 @@
+{
+  "name": "collections-cli",
+  "description": "Sample CLI collection package",
+  "license": "MIT",
+  "category": "data",
+  "versions": {
+    "1.0.0": {
+      "version": "1.0.0",
+      "integrity": "sha256:3f61b706c4dad8ca7feaa7c83d28217e1ba9a4a89aa7dfd3cab9e0e2722d2061",
+      "signature": {
+        "sig": "521e08b56ec87aafc9e25780749d4383f9f21c99c4b2d7d16fe2488ed7b150cb",
+        "keyid": "rubix-de"
+      },
+      "ai_verdict": "clean",
+      "dependencies": {},
+      "capabilities": [],
+      "entry": "src/main.bix",
+      "bin": {}
+    }
+  }
+}

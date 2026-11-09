@@ -1,0 +1,44 @@
+# ==============================================================================
+# Rix Checks — Resolver Test Suite (tests/test_resolver.bix)
+# ==============================================================================
+
+fn check_resolver_primitives(): Integer {
+    # Exact version match
+    if resolve_version_match("v1.0.0", "v1.0.0") != 1 {
+        return 1
+    }
+    if resolve_version_match("v1.0.0", "v2.0.0") != 0 {
+        return 2
+    }
+    
+    # Wildcard match
+    if resolve_version_match("v1.5.2", "*") != 1 {
+        return 3
+    }
+    
+    # Caret match (^v1.0.0 matches v1.2.3)
+    if resolve_version_match("v1.2.3", "^v1.0.0") != 1 {
+        return 4
+    }
+    if resolve_version_match("v2.0.0", "^v1.0.0") != 0 {
+        return 5
+    }
+    
+    let entry = resolve_format_package_entry("webbix", "v1.0.0", "local")
+    if string_length(entry) < 20 {
+        return 6
+    }
+    
+    0
+}
+
+fn main(): Integer {
+    print "Running Rix Check: Dependency Resolver..."
+    let status = check_resolver_primitives()
+    if status != 0 {
+        print "  [FAIL] Resolver check failed with code " + int_to_string(status)
+        return 1
+    }
+    print "  [PASS] Resolver: exact match, wildcard, caret semver constraints, entry formatting"
+    0
+}

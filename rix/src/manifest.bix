@@ -1,0 +1,176 @@
+# ==============================================================================
+# Rix — Package Manifest Processor (src/manifest.bix)
+# ==============================================================================
+
+# Extract a top-level string field from TOML (e.g. name = "webbix")
+fn manifest_parse_field(toml: String, key: String): String {
+    let target = key + " = \""
+    let t_len = string_length(target)
+    let len = string_length(toml)
+    
+    mut found_pos = 0
+    mut i = 0
+    loop i < len {
+        if found_pos < 1 {
+            let sub = substring(toml, i, i + t_len)
+            if sub == target {
+                found_pos := i + t_len
+            }
+        }
+        i := i + 1
+    }
+    
+    if found_pos < 1 {
+        return ""
+    }
+    
+    mut val_end = 0
+    mut j = found_pos
+    loop j < len {
+        if val_end < 1 {
+            let c = byte_at(toml, j)
+            if c == 34 { # ASCII '"'
+                val_end := j
+            }
+        }
+        j := j + 1
+    }
+    
+    if val_end < 1 {
+        return ""
+    }
+    
+    substring(toml, found_pos, val_end)
+}
+
+# Check if a dependency is present in [dependencies] section
+# Returns: 1 if present, 0 if absent
+fn manifest_has_dep(toml: String, dep_name: String): Integer {
+    let target = dep_name + " = \""
+    let t_len = string_length(target)
+    let len = string_length(toml)
+    
+    if len < t_len {
+        return 0
+    }
+    
+    mut i = 0
+    loop i <= (len - t_len) {
+        let sub = substring(toml, i, i + t_len)
+        if sub == target {
+            return 1
+        }
+        i := i + 1
+    }
+    0
+}
+
+# Add a dependency to [dependencies] section in manifest
+fn manifest_add_dep(toml: String, dep_name: String, version: String): String {
+    if manifest_has_dep(toml, dep_name) > 0 {
+        return toml # already exists
+    }
+    
+    let dep_line = dep_name + " = \"" + version + "\"\n"
+    let target_sec = "[dependencies]"
+    let s_len = string_length(target_sec)
+    let len = string_length(toml)
+    
+    mut sec_pos = 0
+    mut i = 0
+    loop i < len {
+        if sec_pos < 1 {
+            let sub = substring(toml, i, i + s_len)
+            if sub == target_sec {
+                sec_pos := i + s_len
+            }
+        }
+        i := i + 1
+    }
+    
+    if sec_pos < 1 {
+        # Section absent: append it
+        return toml + "\n[dependencies]\n" + dep_line
+    }
+    
+    # Locate end of line of [dependencies]
+    mut line_end = 0
+    mut j = sec_pos
+    loop j < len {
+        if line_end < 1 {
+            let c = byte_at(toml, j)
+            if c == 10 { # '\n'
+                line_end := j + 1
+            }
+        }
+        j := j + 1
+    }
+    if line_end < 1 {
+        line_end := len
+    }
+    
+    let part1 = substring(toml, 0, line_end)
+    let part2 = substring(toml, line_end, len)
+    part1 + dep_line + part2
+}
+
+# Remove a dependency from manifest
+fn manifest_remove_dep(toml: String, dep_name: String): String {
+    let target = dep_name + " = \""
+    let t_len = string_length(target)
+    let len = string_length(toml)
+    
+    mut dep_start = 0
+    mut i = 0
+    loop i < len {
+        if dep_start < 1 {
+            let sub = substring(toml, i, i + t_len)
+            if sub == target {
+                dep_start := i
+            }
+        }
+        i := i + 1
+    }
+    
+    if dep_start < 1 {
+        return toml # not found
+    }
+    
+    # Locate end of this dependency line
+    mut dep_end = 0
+    mut j = dep_start
+    loop j < len {
+        if dep_end < 1 {
+            let c = byte_at(toml, j)
+            if c == 10 { # '\n'
+                dep_end := j + 1
+            }
+        }
+        j := j + 1
+    }
+    if dep_end < 1 {
+        dep_end := len
+    }
+    
+    let part1 = substring(toml, 0, dep_start)
+    let part2 = substring(toml, dep_end, len)
+    part1 + part2
+}
+
+# Extract script command from [scripts] section (e.g. dev = "webbix dev")
+fn manifest_get_script(toml: String, script_name: String): String {
+    manifest_parse_field(toml, script_name)
+}
+
+# Format default Rix.toml content for a new package
+fn manifest_format_default(pkg_name: String, version: String): String {
+    "[package]\n" +
+    "name = \"" + pkg_name + "\"\n" +
+    "version = \"" + version + "\"\n" +
+    "edition = \"2026\"\n" +
+    "entry = \"src/main.bix\"\n\n" +
+    "[dependencies]\n\n" +
+    "[scripts]\n" +
+    "start = \"rubix run src/main.bix\"\n" +
+    "test = \"rubix test\"\n"
+}

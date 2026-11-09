@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  /* Disable browser horizontal swipe-to-navigate (back/forward arrow on trackpad swipe) */
+  overscroll-behavior-x: none !important;
+}
+
+/* Prevent swipe back/forward navigation in all scrollable containers without blocking vertical scroll */
+div, main, aside, section, article {
+  overscroll-behavior-x: contain;
+}
+
+/* Clean slim scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* Glassmorphic autofill override so inputs remain smooth glass */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.35) inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in-overlay {
+  animation: fadeInOverlay 0.2s ease-out forwards;
+}
+
+@keyframes tickerMarquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker {
+  display: flex;
+  width: max-content;
+  animation: tickerMarquee 120s linear infinite;
+}
+
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* ======================================================== */
+/* PRINT OPTIMIZATIONS                                      */
+/* Removes browser URL/date headers & footers, dashboard    */
+/* shell, and formats document sheets cleanly for PDF/print */
+/* ======================================================== */
+@media print {
+  @page {
+    margin: 0 !important;
+    size: auto;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Completely remove dashboard navigation, header, sidebar, and print-hidden elements */
+  header,
+  aside,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Unclip dashboard scroll wrappers so documents print fully across pages */
+  main,
+  div {
+    overflow: visible !important;
+  }
+
+  .job-offer-print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 800px !important;
+    min-height: 100vh !important;
+    padding: 16mm 20mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .job-offer-page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
+

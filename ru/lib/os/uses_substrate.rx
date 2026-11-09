@@ -1,0 +1,107 @@
+include "lib/core/types.rx";
+include "lib/os/raiq.rx";
+include "lib/os/rpi.rx";
+
+const USES_OP_READ: uint      = RPI_OP_READ;
+const USES_OP_WRITE: uint     = RPI_OP_WRITE;
+const USES_OP_DMA_COPY: uint  = RPI_OP_DMA_COPY;
+const USES_OP_MAP: uint       = RPI_OP_MAP;
+const USES_OP_FS_OPEN: uint   = RPI_OP_OPEN;
+const USES_OP_FS_CLOSE: uint  = RPI_OP_CLOSE;
+const USES_OP_EXIT: uint      = RPI_OP_EXIT;
+const USES_OP_UNMAP: uint     = RPI_OP_UNMAP;
+const USES_OP_EPOLL: uint     = RPI_OP_EPOLL;
+const USES_OP_UNLINK: uint    = RPI_OP_DELETE;
+const USES_OP_SOCKET: uint    = RPI_OP_SOCKET;
+const USES_OP_CONNECT: uint   = RPI_OP_CONNECT;
+const USES_OP_BIND: uint      = RPI_OP_BIND;
+const USES_OP_LISTEN: uint    = RPI_OP_LISTEN;
+const USES_OP_ACCEPT: uint    = RPI_OP_ACCEPT;
+
+const USES_CAP_TAG_SOVEREIGN: uint = RPI_CAP_TAG_SOVEREIGN;
+const USES_CAP_PROOF_ROOT: uint    = RPI_CAP_PROOF_ROOT;
+
+struct AcrqSubmissionEntry64 {
+    opcode: uint,
+    flags: uint,
+    capability_tag: uint,
+    capability_proof: uint,
+    source_addr: uint,
+    dest_addr: uint,
+    length: uint,
+    user_tag: uint,
+}
+
+struct AcrqCompletionEntry32 {
+    user_tag: uint,
+    status: uint,
+    transferred_bytes: uint,
+    timestamp_cycles: uint,
+}
+
+fn acrq_prepare_sqe(
+    sqe: *mut AcrqSubmissionEntry64,
+    opcode: uint,
+    src: uint,
+    dst: uint,
+    len: uint,
+    user_tag: uint
+) {
+    sqe.opcode = opcode;
+    sqe.flags = 0;
+    sqe.capability_tag = USES_CAP_TAG_SOVEREIGN;
+    sqe.capability_proof = USES_CAP_PROOF_ROOT;
+    sqe.source_addr = src;
+    sqe.dest_addr = dst;
+    sqe.length = len;
+    sqe.user_tag = user_tag;
+}
+
+fn uses_host_port_dispatch(sqe: *const AcrqSubmissionEntry64) -> int {
+    let rsqe: *const RaiqSubmissionEntry64 = sqe as *const RaiqSubmissionEntry64;
+    return rpi_host_dispatch(rsqe);
+}
+
+fn uses_substrate_alloc(bytes: uint) -> *mut u8 {
+    return rpi_alloc(bytes);
+}
+
+fn uses_substrate_free(ptr: *mut u8, bytes: uint) {
+    rpi_free(ptr, bytes);
+}
+
+fn uses_substrate_epoll_create(flags: uint) -> int {
+    return rpi_epoll_create(flags);
+}
+
+fn uses_substrate_unlink(path: *const byte) -> int {
+    return rpi_unlink(path);
+}
+
+fn uses_substrate_write(channel: uint, buf: *const byte, len: uint) -> int {
+    return rpi_write(channel, buf, len);
+}
+
+fn uses_substrate_read(channel: uint, buf: *mut byte, max_len: uint) -> int {
+    return rpi_read(channel, buf, max_len);
+}
+
+fn uses_substrate_open(path: *const byte, flags: uint, mode: uint) -> int {
+    return rpi_open(path, flags, mode);
+}
+
+fn uses_substrate_close(channel: uint) -> int {
+    return rpi_close(channel);
+}
+
+fn uses_substrate_write_file(filepath: *const byte, buf: *const u8, len: uint) -> int {
+    return rpi_write_file(filepath, buf, len);
+}
+
+fn uses_substrate_read_file(filepath: *const byte, dst: *mut u8, max_len: uint) -> int {
+    return rpi_read_file(filepath, dst, max_len);
+}
+
+fn uses_substrate_map_plate(filepath: *const byte, max_size: uint) -> *mut u8 {
+    return rpi_map_plate(filepath, max_size);
+}

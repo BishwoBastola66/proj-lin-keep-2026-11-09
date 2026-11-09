@@ -1,0 +1,58 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — Home Route (routes/home.bix)
+# ==============================================================================
+
+include "../../webbix/webbix.bix";
+include "../components/navbar.bix";
+include "../components/footer.bix";
+
+fn render_home_page(app: *App): void {
+    Page(app, "/", "Yugant Xettri — Systems Architect & Compiler Engineer");
+        Meta(app, "Yugant Xettri — Systems Architect", "Systems programmer, compiler architect, and creator of native infrastructure.");
+        render_navbar(app);
+
+        Hero(
+            app,
+            "Systems Architecture • Compilers • High-Performance Computing",
+            "Yugant Xettri",
+            "Architecting zero-overhead native systems, self-hosting compilers, and next-generation web engines from the bare metal up.",
+            "Explore Systems",
+            "/projects"
+        );
+
+        Button(app, "★ Sponsor / Star", "stars");
+
+        Stats(app);
+            StatReactive(app, "Live Views", "views");
+            StatReactive(app, "Community Stars", "stars");
+            StatReactive(app, "Packages Downloaded", "downloads");
+            StatMetric(app, "Syscall Latency", "< 0.8 µs");
+        End(app);
+
+        Section(app, "Core Systems Engineering", "Production-grade language engines, JIT compilers, and native runtimes.");
+            Grid(app, 2);
+                ProjectCard(app, "Compiler Engineering", "Rubix Language", "Self-bootstrapping systems programming language featuring native x86-64 machine code generation.", "Compilers", "x86-64");
+                ProjectCard(app, "Virtual Execution", "REX Engine", "High-performance bytecode virtual machine and JIT compiler for execution exchange.", "Bytecode", "JIT Engine");
+                ProjectCard(app, "Native Web Framework", "Webbix", "Declarative web framework running directly on POSIX TCP sockets with zero HTML strings or JS wrappers.", "Web IR", "POSIX Sockets");
+                ProjectCard(app, "Developer Tooling", "RIX CLI", "Unified package runner, builder, test battery executor, and native workspace manager.", "Tooling", "Developer CLI");
+            End(app);
+        End(app);
+
+        Section(app, "Technical Specializations", "Disciplines engineered from first principles.");
+            Grid(app, 2);
+                BadgeCard(app, "Systems & Low-Level", "x86-64 Assembly", "Linux Syscalls", "POSIX Networking", "Memory Arenas", "Zero-Copy I/O");
+                BadgeCard(app, "Compilers & Languages", "Lexer / AST", "Type Checking", "IR Optimization", "Instruction Selection", "Code Emission");
+            End(app);
+        End(app);
+
+        Section(app, "Milestone Trajectory", "Chronological systems milestones and engineering breakthroughs.");
+            TimelineGroup(app);
+                TimelineEntry(app, "Rubix Self-Hosting 1.0", "Designed and implemented self-hosting compiler with 3-stage bootstrap fixed-point verification.", "2025");
+                TimelineEntry(app, "REX Virtual Machine", "Engineered register-based VM with DOM mutation logging and native execution bridge.", "2026 Q1");
+                TimelineEntry(app, "Webbix Native Rebuild", "Architected full-stack declarative web framework running on pure native POSIX sockets.", "2026 Q3");
+            End(app);
+        End(app);
+
+        render_footer(app);
+    End(app);
+}

@@ -1,0 +1,16 @@
+# ==============================================================================
+# Rubix Library Category Pill Component
+# File: library/app/src/components/category_pill.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "theme.bix";
+
+fn comp_category_pills(app: *App): void {
+    ButtonNavigate(app, "Web", "/category/web");
+    ButtonNavigate(app, "AI & ML", "/category/ai");
+    ButtonNavigate(app, "Data", "/category/data");
+    ButtonNavigate(app, "Tools", "/category/tools");
+    ButtonNavigate(app, "Systems", "/category/systems");
+    ButtonNavigate(app, "Networking", "/category/networking");
+}

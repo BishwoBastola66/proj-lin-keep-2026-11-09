@@ -1,0 +1,9 @@
+# ==============================================================================
+# Footer Component (components/footer.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+
+fn comp_footer(app: *App, copyright: str): void {
+    Footer(app, copyright);
+}

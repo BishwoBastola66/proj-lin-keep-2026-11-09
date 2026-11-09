@@ -1,0 +1,7 @@
+# ==============================================================================
+# Yugant Xettri Portfolio — Root Entry Bridge
+# File: yugant-portfolio/App.bix
+# Forwards to src/App.bix
+# ==============================================================================
+
+include "src/App.bix";

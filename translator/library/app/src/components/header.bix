@@ -1,0 +1,11 @@
+# ==============================================================================
+# Rubix Library Header Component
+# File: library/app/src/components/header.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "theme.bix";
+
+fn comp_header(app: *App): void {
+    Navbar(app, "Rubix Library", "v1.0", "Packages", "/packages", "Publish", "/publish");
+}

@@ -1,0 +1,68 @@
+# ==============================================================================
+# Webbix Web IR — Native Style Representation (webbix/ir/style.bix)
+# Pure typed Rubix style properties.
+# Zero CSS strings.
+# Exactly 16 fields (Rubix compiler struct table limit).
+# ==============================================================================
+
+include "types.bix";
+
+# ------------------------------------------------------------------------------
+# Core Style Struct — Full Styling Model (16 fields, max capacity)
+# ------------------------------------------------------------------------------
+struct WebStyle {
+    layout: i64,
+    align: i64,
+    justify: i64,
+    gap: i64,
+    padding_x: i64,
+    padding_y: i64,
+    text_color: i64,
+    bg_color: i64,
+    border_color: i64,
+    text_size: i64,
+    weight: i64,
+    radius: i64,
+    shadow: i64,
+    animation: i64,
+    columns: i64,
+    is_responsive: i64
+}
+
+fn web_style_default(s: *WebStyle): void {
+    s.layout = WebLayout.Column;
+    s.align = WebAlign.Start;
+    s.justify = WebAlign.Start;
+    s.gap = 0;
+    s.padding_x = 0;
+    s.padding_y = 0;
+    s.text_color = WebColor.Default;
+    s.bg_color = WebColor.Default;
+    s.border_color = WebColor.Transparent;
+    s.text_size = WebTextSize.Md;
+    s.weight = WebWeight.Normal;
+    s.radius = WebRadius.None;
+    s.shadow = WebShadow.None;
+    s.animation = WebAnimation.None;
+    s.columns = 1;
+    s.is_responsive = 0;
+}
+
+fn web_style_flex_row(s: *WebStyle, gap: i64): void {
+    web_style_default(s);
+    s.layout = WebLayout.Row;
+    s.gap = gap;
+}
+
+fn web_style_flex_col(s: *WebStyle, gap: i64): void {
+    web_style_default(s);
+    s.layout = WebLayout.Column;
+    s.gap = gap;
+}
+
+fn web_style_grid(s: *WebStyle, columns: i64, gap: i64): void {
+    web_style_default(s);
+    s.layout = WebLayout.Grid;
+    s.columns = columns;
+    s.gap = gap;
+}

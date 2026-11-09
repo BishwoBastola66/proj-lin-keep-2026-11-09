@@ -1,0 +1,155 @@
+# ==============================================================================
+# Webbix Framework — Native Platform & Syscall Abstraction (webbix/net/platform.bix)
+# Pure Rubix low-level platform dispatcher.
+# Provides OS-independent contracts with Linux x86-64 native syscall implementation.
+# ==============================================================================
+
+let WEBMIX_PLATFORM_GENERIC      = 0;
+let WEBMIX_PLATFORM_LINUX_X86_64 = 1;
+let WEBMIX_PLATFORM_DARWIN_ARM64 = 2;
+let WEBMIX_PLATFORM_WINDOWS_X64  = 3;
+
+# Linux x86-64 Syscall Numbers
+let LINUX_SYS_READ       = 0;
+let LINUX_SYS_WRITE      = 1;
+let LINUX_SYS_OPEN       = 2;
+let LINUX_SYS_CLOSE      = 3;
+let LINUX_SYS_MMAP       = 9;
+let LINUX_SYS_MPROTECT   = 10;
+let LINUX_SYS_SOCKET     = 41;
+let LINUX_SYS_ACCEPT     = 43;
+let LINUX_SYS_BIND       = 49;
+let LINUX_SYS_LISTEN     = 50;
+let LINUX_SYS_SETSOCKOPT = 54;
+let LINUX_SYS_EXIT       = 60;
+
+# Socket Layer Constants
+let AF_INET        = 2;
+let AF_INET6       = 10;
+let SOCK_STREAM    = 1;
+let SOCK_DGRAM     = 2;
+let IPPROTO_IP     = 0;
+let IPPROTO_TCP    = 6;
+let SOL_SOCKET     = 1;
+let SO_REUSEADDR   = 2;
+
+struct PlatformSyscallArgs {
+    num: i64,
+    a1: i64,
+    a2: i64,
+    a3: i64,
+    a4: i64,
+    a5: i64,
+    a6: i64
+}
+
+struct PlatformDispatcher {
+    code_page: i64,
+    is_initialized: i64,
+    target_os: i64
+}
+
+fn webbix_platform_emit_b(buf: i64, pos: i64, val: i64): i64 {
+    set_byte(buf, pos, val);
+    return pos + 1;
+}
+
+fn webbix_platform_build_trampoline(buf: i64): i64 {
+    let p = 0;
+    # System V AMD64 to Linux Syscall Adapter
+    # sys_call_code_args passes: rdi = trampoline, rsi = 0, rdx = &args
+    # After caller setup: rsi = &args
+    # 1. mov rax, [rsi]       (48 8B 06) -> syscall number
+    p = webbix_platform_emit_b(buf, p, 72);
+    p = webbix_platform_emit_b(buf, p, 139);
+    p = webbix_platform_emit_b(buf, p, 6);
+
+    # 2. mov rdx, [rsi + 24]  (48 8B 56 18) -> arg 3
+    p = webbix_platform_emit_b(buf, p, 72);
+    p = webbix_platform_emit_b(buf, p, 139);
+    p = webbix_platform_emit_b(buf, p, 86);
+    p = webbix_platform_emit_b(buf, p, 24);
+
+    # 3. mov r10, [rsi + 32]  (4C 8B 56 20) -> arg 4
+    p = webbix_platform_emit_b(buf, p, 76);
+    p = webbix_platform_emit_b(buf, p, 139);
+    p = webbix_platform_emit_b(buf, p, 86);
+    p = webbix_platform_emit_b(buf, p, 32);
+
+    # 4. mov r8,  [rsi + 40]  (4C 8B 46 28) -> arg 5
+    p = webbix_platform_emit_b(buf, p, 76);
+    p = webbix_platform_emit_b(buf, p, 139);
+    p = webbix_platform_emit_b(buf, p, 70);
+    p = webbix_platform_emit_b(buf, p, 40);
+
+    # 5. mov r9,  [rsi + 48]  (4C 8B 4E 30) -> arg 6
+    p = webbix_platform_emit_b(buf, p, 76);
+    p = webbix_platform_emit_b(buf, p, 139);
+    p = webbix_platform_emit_b(buf, p, 78);
+    p = webbix_platform_emit_b(buf, p, 48);
+
+    # 6. mov rdi, [rsi + 8]   (48 8B 7E 08) -> arg 1
+    p = webbix_platform_emit_b(buf, p, 72);
+    p = webbix_platform_emit_b(buf, p, 139);
+    p = webbix_platform_emit_b(buf, p, 126);
+    p = webbix_platform_emit_b(buf, p, 8);
+
+    # 7. mov rsi, [rsi + 16]  (48 8B 76 10) -> arg 2
+    p = webbix_platform_emit_b(buf, p, 72);
+    p = webbix_platform_emit_b(buf, p, 139);
+    p = webbix_platform_emit_b(buf, p, 118);
+    p = webbix_platform_emit_b(buf, p, 16);
+
+    # 8. syscall              (0F 05)
+    p = webbix_platform_emit_b(buf, p, 15);
+    p = webbix_platform_emit_b(buf, p, 5);
+
+    # 9. ret                  (C3)
+    p = webbix_platform_emit_b(buf, p, 195);
+    return p;
+}
+
+fn webbix_platform_init(disp: *PlatformDispatcher): i64 {
+    # Allocate 4KB RWX page: PROT_READ|PROT_WRITE|PROT_EXEC = 7, MAP_PRIVATE|MAP_ANONYMOUS = 34
+    let page = sys_mmap(0, 4096, 7, 34, -1, 0);
+    if page <= 0 {
+        disp.is_initialized = 0;
+        return -1;
+    }
+    webbix_platform_build_trampoline(page);
+    disp.code_page = page;
+    disp.is_initialized = 1;
+    disp.target_os = WEBMIX_PLATFORM_LINUX_X86_64;
+    return 0;
+}
+
+fn webbix_platform_syscall(
+    disp: *PlatformDispatcher,
+    num: i64,
+    a1: i64,
+    a2: i64,
+    a3: i64,
+    a4: i64,
+    a5: i64
+): i64 {
+    if disp.is_initialized == 0 {
+        return -100;
+    }
+    let args: PlatformSyscallArgs = PlatformSyscallArgs {
+        num: num,
+        a1: a1,
+        a2: a2,
+        a3: a3,
+        a4: a4,
+        a5: a5,
+        a6: 0
+    };
+    return sys_call_code_args(disp.code_page, 0, &args);
+}
+
+fn webbix_platform_destroy(disp: *PlatformDispatcher): void {
+    if disp.is_initialized == 1 {
+        disp.is_initialized = 0;
+        disp.code_page = 0;
+    }
+}

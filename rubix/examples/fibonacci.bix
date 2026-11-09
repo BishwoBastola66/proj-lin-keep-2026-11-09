@@ -1,0 +1,23 @@
+# ==============================================================================
+# RUBIX EXAMPLE: RECURSIVE FIBONACCI
+# Canonical Systems Benchmark in Pure Native Rubix (.bix)
+# ==============================================================================
+
+fn fib(n: i64): i64 {
+    if n <= 1 {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+fn main(): i64 {
+    let res = fib(25);
+    println(">>> Fibonacci fib(25) computed:");
+    print res;
+    if res != 75025 {
+        println("FAIL: Expected 75025");
+        return 1;
+    }
+    println("PASS: Fibonacci verified (res = 75025)");
+    return 0;
+}

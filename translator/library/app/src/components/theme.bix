@@ -1,0 +1,41 @@
+# ==============================================================================
+# Rubix Library Theme Tokens (Single Source of Truth)
+# File: library/app/src/components/theme.bix
+# Consumes library/theme/white.tokens.json
+# ==============================================================================
+
+# Core Colors (Strictly White-First per white.tokens.json)
+let THEME_COLOR_BG = "#FFFFFF";
+let THEME_COLOR_SURFACE = "#FFFFFF";
+let THEME_COLOR_SURFACE_ALT = "#F7F8FA";
+let THEME_COLOR_SURFACE_HOVER = "#F2F4F7";
+let THEME_COLOR_BORDER = "#E6E8EC";
+let THEME_COLOR_BORDER_STRONG = "#D0D5DD";
+let THEME_COLOR_TEXT = "#101828";
+let THEME_COLOR_TEXT_MUTED = "#475467";
+let THEME_COLOR_TEXT_SUBTLE = "#98A2B3";
+
+# Exactly ONE Accent Color per Page
+let THEME_COLOR_ACCENT = "#2563EB";
+let THEME_COLOR_ACCENT_HOVER = "#1D4ED8";
+let THEME_COLOR_ACCENT_WEAK = "#EFF4FF";
+let THEME_COLOR_ACCENT_CONTRAST = "#FFFFFF";
+
+# Status Tokens
+let THEME_COLOR_SUCCESS = "#12B76A";
+let THEME_COLOR_SUCCESS_WEAK = "#ECFDF3";
+let THEME_COLOR_WARN = "#F79009";
+let THEME_COLOR_WARN_WEAK = "#FFFAEB";
+let THEME_COLOR_DANGER = "#F04438";
+let THEME_COLOR_DANGER_WEAK = "#FEF3F2";
+let THEME_COLOR_FOCUS_RING = "#2563EB";
+
+# Radii
+let THEME_RADIUS_SM = "6px";
+let THEME_RADIUS_MD = "10px";
+let THEME_RADIUS_LG = "12px";
+let THEME_RADIUS_PILL = "9999px";
+
+# Typography
+let THEME_FONT_SANS = "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+let THEME_FONT_MONO = "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace";

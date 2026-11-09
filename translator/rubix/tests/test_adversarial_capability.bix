@@ -1,0 +1,16 @@
+# ==============================================================================
+# Rubix Adversarial Test Suite — Capability Violation Detection
+# File: tests/test_adversarial_capability.bix
+#
+# Asserts that invoking system calls without an explicit capability token
+# is strictly rejected at compile time with ERR_SIR_CAPABILITY_UNAUTHORIZED.
+# ==============================================================================
+
+fn unprivileged_kernel_call(): i64 effect(syscall) {
+    # VIOLATION: Function requires syscalls but holds zero system capabilities!
+    return 1;
+}
+
+fn main(): i64 effect(io, syscall) with(CapFs) {
+    return unprivileged_kernel_call();
+}

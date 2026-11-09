@@ -1,0 +1,36 @@
+# ==============================================================================
+# Rubix Standard Library: File System Operations (std/fs.bix)
+# Pure native Linux file I/O operations via direct system calls.
+# ==============================================================================
+
+fn file_open(path: str, flags: i64, mode: i64): i64 {
+    let p_len = string_length(path);
+    let buf = sys_mmap_page();
+    let i = 0;
+    while i < p_len {
+        set_byte(buf, i, path[i] as i64);
+        i = i + 1;
+    }
+    set_byte(buf, p_len, 0);
+    let fd = sys_open(buf, flags, mode);
+    sys_munmap(buf, 4096);
+    return fd;
+}
+
+fn file_close(fd: i64): i64 =
+    sys_close(fd);
+
+fn file_read(fd: i64, buf: i64, count: i64): i64 =
+    sys_read(fd, buf, count);
+
+fn file_write(fd: i64, buf: i64, count: i64): i64 =
+    sys_write(fd, buf, count);
+
+fn file_exists(path: str): bool {
+    let fd = file_open(path, 0, 0);
+    if fd >= 0 {
+        sys_close(fd);
+        return true;
+    }
+    return false;
+}

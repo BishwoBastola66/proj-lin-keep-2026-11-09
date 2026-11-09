@@ -1,0 +1,532 @@
+# ==============================================================================
+# Webbix Web IR — Native Declarative Builders (webbix/ir/builder.bix)
+# Pure Rubix developer interface for constructing modern Web IR trees.
+# Zero HTML tags, zero CSS rules, zero string concatenation.
+#
+# These are the low-level building blocks. Application developers use
+# the high-level App API in declarative/app.bix instead.
+# ==============================================================================
+
+include "app.bix";
+
+# ==============================================================================
+# Document Structure
+# ==============================================================================
+
+fn web_page(app: *WebApp, route: str, title: str): i64 {
+    app.route = route;
+    app.title = title;
+    let page_id = web_app_add_node(app, WebKind.Page, -1);
+    app.nodes[page_id].text = title;
+    app.nodes[page_id].link_url = route;
+    return page_id;
+}
+
+fn web_header(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Header, parent_id);
+    return id;
+}
+
+fn web_main(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Main, parent_id);
+    return id;
+}
+
+# ==============================================================================
+# Navigation
+# ==============================================================================
+
+fn web_nav(app: *WebApp, parent_id: i64, brand_title: str, badge_text: str): i64 {
+    let nav_id = web_app_add_node(app, WebKind.Nav, parent_id);
+    app.nodes[nav_id].text = brand_title;
+    app.nodes[nav_id].aux_text = badge_text;
+    return nav_id;
+}
+
+fn web_nav_link(app: *WebApp, nav_id: i64, label: str, url: str): i64 {
+    let link_id = web_app_add_node(app, WebKind.NavLink, nav_id);
+    app.nodes[link_id].text = label;
+    app.nodes[link_id].link_url = url;
+    return link_id;
+}
+
+# ==============================================================================
+# Content Sections
+# ==============================================================================
+
+fn web_hero(app: *WebApp, parent_id: i64, pretitle: str): i64 {
+    let hero_id = web_app_add_node(app, WebKind.Hero, parent_id);
+    app.nodes[hero_id].aux_text = pretitle;
+    app.nodes[hero_id].style.animation = WebAnimation.FadeIn;
+    return hero_id;
+}
+
+fn web_section(app: *WebApp, parent_id: i64, title: str, desc: str): i64 {
+    let sec_id = web_app_add_node(app, WebKind.Section, parent_id);
+    app.nodes[sec_id].text = title;
+    app.nodes[sec_id].desc = desc;
+    return sec_id;
+}
+
+fn web_article(app: *WebApp, parent_id: i64, title: str): i64 {
+    let id = web_app_add_node(app, WebKind.Article, parent_id);
+    app.nodes[id].text = title;
+    return id;
+}
+
+fn web_aside(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Aside, parent_id);
+    return id;
+}
+
+# ==============================================================================
+# Typography
+# ==============================================================================
+
+fn web_title(app: *WebApp, parent_id: i64, title_text: str): i64 {
+    let title_id = web_app_add_node(app, WebKind.Title, parent_id);
+    app.nodes[title_id].text = title_text;
+    app.nodes[title_id].style.text_size = WebTextSize.Display1;
+    app.nodes[title_id].style.weight = WebWeight.Bold;
+    return title_id;
+}
+
+fn web_heading(app: *WebApp, parent_id: i64, heading_text: str, level: i64): i64 {
+    let heading_id = web_app_add_node(app, WebKind.Heading, parent_id);
+    app.nodes[heading_id].text = heading_text;
+    app.nodes[heading_id].style.text_size = WebTextSize.Xl2;
+    app.nodes[heading_id].style.weight = WebWeight.SemiBold;
+    return heading_id;
+}
+
+fn web_text(app: *WebApp, parent_id: i64, body_text: str): i64 {
+    let text_id = web_app_add_node(app, WebKind.Text, parent_id);
+    app.nodes[text_id].text = body_text;
+    return text_id;
+}
+
+fn web_paragraph(app: *WebApp, parent_id: i64, p_text: str): i64 {
+    let id = web_app_add_node(app, WebKind.Paragraph, parent_id);
+    app.nodes[id].text = p_text;
+    return id;
+}
+
+# ==============================================================================
+# Interactive Elements
+# ==============================================================================
+
+fn web_button(app: *WebApp, parent_id: i64, label: str): i64 {
+    let btn_id = web_app_add_node(app, WebKind.Button, parent_id);
+    app.nodes[btn_id].text = label;
+    app.nodes[btn_id].style.radius = WebRadius.Md;
+    app.nodes[btn_id].style.padding_x = 16;
+    app.nodes[btn_id].style.padding_y = 10;
+    return btn_id;
+}
+
+# ==============================================================================
+# Event Handlers & State Modifiers
+# ==============================================================================
+
+fn web_on_click_increment(app: *WebApp, node_id: i64, state_key: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].event.event_kind = WebEventKind.Click;
+    app.nodes[node_id].event.action_kind = WebActionKind.IncrementState;
+    app.nodes[node_id].event.target_state_key = state_key;
+}
+
+fn web_on_click_decrement(app: *WebApp, node_id: i64, state_key: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].event.event_kind = WebEventKind.Click;
+    app.nodes[node_id].event.action_kind = WebActionKind.DecrementState;
+    app.nodes[node_id].event.target_state_key = state_key;
+}
+
+fn web_on_click_toggle(app: *WebApp, node_id: i64, state_key: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].event.event_kind = WebEventKind.Click;
+    app.nodes[node_id].event.action_kind = WebActionKind.ToggleState;
+    app.nodes[node_id].event.target_state_key = state_key;
+}
+
+fn web_on_click_set(app: *WebApp, node_id: i64, state_key: i64, value: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].event.event_kind = WebEventKind.Click;
+    app.nodes[node_id].event.action_kind = WebActionKind.SetState;
+    app.nodes[node_id].event.target_state_key = state_key;
+    app.nodes[node_id].event.payload_val = value;
+}
+
+fn web_on_click_navigate(app: *WebApp, node_id: i64, target_url: str): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].event.event_kind = WebEventKind.Click;
+    app.nodes[node_id].event.action_kind = WebActionKind.Navigate;
+    app.nodes[node_id].link_url = target_url;
+}
+
+fn web_on_submit(app: *WebApp, node_id: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].event.event_kind = WebEventKind.Submit;
+    app.nodes[node_id].event.action_kind = WebActionKind.SubmitForm;
+}
+
+# ==============================================================================
+# Reactive Statistics & Dashboards
+# ==============================================================================
+
+fn web_stats_grid(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.StatsGrid, parent_id);
+    app.nodes[id].style.layout = WebLayout.Grid;
+    app.nodes[id].style.columns = 3;
+    app.nodes[id].style.gap = 16;
+    return id;
+}
+
+fn web_stat_card(app: *WebApp, parent_id: i64, label: str, state_binding: i64): i64 {
+    let card_id = web_app_add_node(app, WebKind.StatCard, parent_id);
+    app.nodes[card_id].text = label;
+    app.nodes[card_id].state_binding = state_binding;
+    app.nodes[card_id].state_value = web_app_get_state(app, state_binding);
+    app.nodes[card_id].style.radius = WebRadius.Lg;
+    app.nodes[card_id].style.shadow = WebShadow.Sm;
+    return card_id;
+}
+
+fn web_stat_metric(app: *WebApp, parent_id: i64, label: str, value_str: str): i64 {
+    let card_id = web_app_add_node(app, WebKind.StatCard, parent_id);
+    app.nodes[card_id].text = label;
+    app.nodes[card_id].aux_text = value_str;
+    app.nodes[card_id].style.radius = WebRadius.Lg;
+    app.nodes[card_id].style.shadow = WebShadow.Sm;
+    return card_id;
+}
+
+# ==============================================================================
+# Layout Grids & Flexbox
+# ==============================================================================
+
+fn web_grid(app: *WebApp, parent_id: i64, columns: i64): i64 {
+    let grid_id = web_app_add_node(app, WebKind.Grid, parent_id);
+    app.nodes[grid_id].style.layout = WebLayout.Grid;
+    app.nodes[grid_id].style.columns = columns;
+    app.nodes[grid_id].style.gap = 24;
+    return grid_id;
+}
+
+fn web_flex_row(app: *WebApp, parent_id: i64, gap: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Flex, parent_id);
+    app.nodes[id].style.layout = WebLayout.Row;
+    app.nodes[id].style.gap = gap;
+    return id;
+}
+
+fn web_flex_col(app: *WebApp, parent_id: i64, gap: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Flex, parent_id);
+    app.nodes[id].style.layout = WebLayout.Column;
+    app.nodes[id].style.gap = gap;
+    return id;
+}
+
+# ==============================================================================
+# Cards & Badges
+# ==============================================================================
+
+fn web_card(app: *WebApp, parent_id: i64, title: str): i64 {
+    let id = web_app_add_node(app, WebKind.Card, parent_id);
+    app.nodes[id].text = title;
+    app.nodes[id].style.radius = WebRadius.Lg;
+    app.nodes[id].style.shadow = WebShadow.Md;
+    return id;
+}
+
+fn web_project_card(
+    app: *WebApp,
+    parent_id: i64,
+    tag: str,
+    title: str,
+    desc: str,
+    tech1: str,
+    tech2: str
+): i64 {
+    let card_id = web_app_add_node(app, WebKind.ProjectCard, parent_id);
+    app.nodes[card_id].text = title;
+    app.nodes[card_id].aux_text = tag;
+    app.nodes[card_id].desc = desc;
+    app.nodes[card_id].placeholder = tech1;
+    app.nodes[card_id].style.radius = WebRadius.Lg;
+    app.nodes[card_id].style.shadow = WebShadow.Md;
+    return card_id;
+}
+
+fn web_badge_card(
+    app: *WebApp,
+    parent_id: i64,
+    title: str,
+    b1: str,
+    b2: str,
+    b3: str,
+    b4: str,
+    b5: str
+): i64 {
+    let card_id = web_app_add_node(app, WebKind.Badge, parent_id);
+    app.nodes[card_id].text = title;
+    app.nodes[card_id].aux_text = b1;
+    app.nodes[card_id].desc = b2;
+    app.nodes[card_id].placeholder = b3;
+    app.nodes[card_id].style.radius = WebRadius.Lg;
+    return card_id;
+}
+
+fn web_badge(app: *WebApp, parent_id: i64, label: str): i64 {
+    let id = web_app_add_node(app, WebKind.Badge, parent_id);
+    app.nodes[id].text = label;
+    app.nodes[id].style.radius = WebRadius.Full;
+    app.nodes[id].style.padding_x = 8;
+    app.nodes[id].style.padding_y = 4;
+    return id;
+}
+
+# ==============================================================================
+# Forms & Inputs
+# ==============================================================================
+
+fn web_form(app: *WebApp, parent_id: i64, action_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Form, parent_id);
+    app.nodes[id].state_binding = action_id;
+    return id;
+}
+
+fn web_label(app: *WebApp, parent_id: i64, label_text: str, for_field: str): i64 {
+    let id = web_app_add_node(app, WebKind.Label, parent_id);
+    app.nodes[id].text = label_text;
+    app.nodes[id].aux_text = for_field;
+    return id;
+}
+
+fn web_input(app: *WebApp, parent_id: i64, input_kind: i64, placeholder: str, state_key: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Input, parent_id);
+    app.nodes[id].input_kind = input_kind;
+    app.nodes[id].placeholder = placeholder;
+    app.nodes[id].state_binding = state_key;
+    app.nodes[id].style.radius = WebRadius.Md;
+    return id;
+}
+
+# ==============================================================================
+# Lists, Tables, Media, Overlays
+# ==============================================================================
+
+fn web_list(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.List, parent_id);
+    return id;
+}
+
+fn web_list_item(app: *WebApp, parent_id: i64, item_text: str): i64 {
+    let id = web_app_add_node(app, WebKind.ListItem, parent_id);
+    app.nodes[id].text = item_text;
+    return id;
+}
+
+fn web_table(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Table, parent_id);
+    return id;
+}
+
+fn web_image(app: *WebApp, parent_id: i64, src: str, alt: str): i64 {
+    let id = web_app_add_node(app, WebKind.Image, parent_id);
+    app.nodes[id].link_url = src;
+    app.nodes[id].aux_text = alt;
+    return id;
+}
+
+fn web_modal(app: *WebApp, parent_id: i64, title: str): i64 {
+    let id = web_app_add_node(app, WebKind.Modal, parent_id);
+    app.nodes[id].text = title;
+    return id;
+}
+
+fn web_tabs(app: *WebApp, parent_id: i64, slot: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_TABS, parent_id);
+    app.nodes[id].state_binding = slot;
+    return id;
+}
+
+# ==============================================================================
+# Footers
+# ==============================================================================
+
+fn web_footer(app: *WebApp, parent_id: i64, copyright_text: str): i64 {
+    let footer_id = web_app_add_node(app, WebKind.Footer, parent_id);
+    app.nodes[footer_id].text = copyright_text;
+    return footer_id;
+}
+
+# ==============================================================================
+# Style Setters
+# ==============================================================================
+
+fn web_set_style_color(app: *WebApp, node_id: i64, text_color: i64, bg_color: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].style.text_color = text_color;
+    app.nodes[node_id].style.bg_color = bg_color;
+}
+
+fn web_set_style_border(app: *WebApp, node_id: i64, border_color: i64, radius: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].style.border_color = border_color;
+    app.nodes[node_id].style.radius = radius;
+}
+
+fn web_set_style_padding(app: *WebApp, node_id: i64, px: i64, py: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].style.padding_x = px;
+    app.nodes[node_id].style.padding_y = py;
+}
+
+fn web_set_style_shadow(app: *WebApp, node_id: i64, shadow: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].style.shadow = shadow;
+}
+
+fn web_set_style_animation(app: *WebApp, node_id: i64, animation: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].style.animation = animation;
+}
+
+fn web_set_render_mode(app: *WebApp, node_id: i64, mode: i64): void {
+    if (node_id < 0) | (node_id >= app.node_count) { return; }
+    app.nodes[node_id].render_mode = mode;
+}
+
+# ==============================================================================
+# Additional UI Primitives & Components
+# ==============================================================================
+
+fn web_button_link(app: *WebApp, parent_id: i64, label: str, url: str, color: i64): i64 {
+    let btn_id = web_app_add_node(app, WebKind.Button, parent_id);
+    app.nodes[btn_id].text = label;
+    app.nodes[btn_id].link_url = url;
+    app.nodes[btn_id].style.bg_color = color;
+    app.nodes[btn_id].style.radius = WebRadius.Md;
+    return btn_id;
+}
+
+fn web_stat_card_static(app: *WebApp, stats_grid: i64, label: str, metric_value: str, color: i64): i64 {
+    let card_id = web_app_add_node(app, WebKind.StatCard, stats_grid);
+    app.nodes[card_id].text = label;
+    app.nodes[card_id].aux_text = metric_value;
+    app.nodes[card_id].style.text_color = color;
+    app.nodes[card_id].style.radius = WebRadius.Lg;
+    app.nodes[card_id].style.shadow = WebShadow.Sm;
+    return card_id;
+}
+
+fn web_flex(app: *WebApp, parent_id: i64, direction: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Flex, parent_id);
+    app.nodes[id].style.layout = direction;
+    return id;
+}
+
+fn web_link(app: *WebApp, parent_id: i64, label: str, url: str): i64 {
+    let id = web_app_add_node(app, WebKind.NavLink, parent_id);
+    app.nodes[id].text = label;
+    app.nodes[id].link_url = url;
+    return id;
+}
+
+fn web_divider(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_DIVIDER, parent_id);
+    return id;
+}
+
+fn web_spacer(app: *WebApp, parent_id: i64, size: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_DIVIDER, parent_id);
+    app.nodes[id].style.gap = size;
+    return id;
+}
+
+fn web_textarea(app: *WebApp, parent_id: i64, placeholder: str, slot: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Input, parent_id);
+    app.nodes[id].input_kind = WebInputKind.Textarea;
+    app.nodes[id].placeholder = placeholder;
+    app.nodes[id].state_binding = slot;
+    return id;
+}
+
+fn web_dialog(app: *WebApp, parent_id: i64, title: str, slot: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Modal, parent_id);
+    app.nodes[id].text = title;
+    app.nodes[id].state_binding = slot;
+    return id;
+}
+
+fn web_tab_panel(app: *WebApp, parent_id: i64, label: str, index: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_TABS, parent_id);
+    app.nodes[id].text = label;
+    app.nodes[id].state_value = index;
+    return id;
+}
+
+fn web_accordion(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Section, parent_id);
+    return id;
+}
+
+fn web_accordion_panel(app: *WebApp, parent_id: i64, title: str, slot: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Card, parent_id);
+    app.nodes[id].text = title;
+    app.nodes[id].state_binding = slot;
+    return id;
+}
+
+fn web_timeline(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_TIMELINE, parent_id);
+    return id;
+}
+
+fn web_timeline_item(app: *WebApp, parent_id: i64, title: str, desc: str, date: str): i64 {
+    let id = web_app_add_node(app, WEB_KIND_TIMELINE, parent_id);
+    app.nodes[id].text = title;
+    app.nodes[id].desc = desc;
+    app.nodes[id].aux_text = date;
+    return id;
+}
+
+fn web_progress(app: *WebApp, parent_id: i64, slot: i64, max_val: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_PROGRESS, parent_id);
+    app.nodes[id].state_binding = slot;
+    app.nodes[id].state_value = max_val;
+    return id;
+}
+
+fn web_spinner(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_SPINNER, parent_id);
+    app.nodes[id].style.animation = WebAnimation.Spin;
+    return id;
+}
+
+fn web_skeleton(app: *WebApp, parent_id: i64, width: i64, height: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Card, parent_id);
+    app.nodes[id].style.padding_x = width;
+    app.nodes[id].style.padding_y = height;
+    app.nodes[id].style.animation = WebAnimation.Pulse;
+    return id;
+}
+
+fn web_toast(app: *WebApp, parent_id: i64, message: str, slot: i64): i64 {
+    let id = web_app_add_node(app, WEB_KIND_TOAST, parent_id);
+    app.nodes[id].text = message;
+    app.nodes[id].state_binding = slot;
+    return id;
+}
+
+fn web_breadcrumb(app: *WebApp, parent_id: i64): i64 {
+    let id = web_app_add_node(app, WebKind.Nav, parent_id);
+    return id;
+}
+
+fn web_tooltip(app: *WebApp, parent_id: i64, text: str): i64 {
+    let id = web_app_add_node(app, WebKind.Badge, parent_id);
+    app.nodes[id].text = text;
+    return id;
+}

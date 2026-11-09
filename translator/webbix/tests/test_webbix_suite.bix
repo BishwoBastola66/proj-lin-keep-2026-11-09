@@ -1,0 +1,278 @@
+# ==============================================================================
+# Webbix Framework — Comprehensive Test Battery
+# File: webbix/tests/test_webbix_suite.bix
+#
+# Tests:
+#   1. Application Creation
+#   2. Component Creation
+#   3. Component Rendering
+#   4. Reactive State
+#   5. Event Handling
+#   6. Routing
+#   7. Basic HTTP Request / Response
+#   8. HTML Serialization
+#   9. Component Composition
+#  10. Native Syscall Platform Trampoline
+#  11. Socket Abstraction & Binding
+#  12. Webbix Server Lifecycle
+# ==============================================================================
+
+include "../state/reactive.bix";
+include "../components/component.bix";
+include "../routing/router.bix";
+include "../server/http.bix";
+include "../client/client.bix";
+include "../runtime/runtime.bix";
+include "../framework/app.bix";
+include "../net/platform.bix";
+include "../net/socket.bix";
+include "../server/server.bix";
+
+fn test_application_creation(): i64 {
+    let app: WebbixApp;
+    webbix_app_init(&app, 100);
+    if app.app_id != 100 { return 0; }
+    if app.is_running != 0 { return 0; }
+    
+    let started = webbix_app_start(&app);
+    if started != 1 { return 0; }
+    if app.is_running != 1 { return 0; }
+    if app.status_code != 200 { return 0; }
+    
+    webbix_app_stop(&app);
+    if app.is_running != 0 { return 0; }
+    return 1;
+}
+
+fn test_component_creation(): i64 {
+    let comp: WebbixComponent;
+    webbix_component_init(&comp, 1, 2, 10);
+    if comp.comp_id != 1 { return 0; }
+    if comp.comp_type != 2 { return 0; }
+    if comp.state_key != 10 { return 0; }
+    
+    let vnode: WebbixVNode;
+    webbix_vnode_init(&vnode, 101, WEBMIX_TAG_DIV, 0);
+    if vnode.node_id != 101 { return 0; }
+    if vnode.tag_id != WEBMIX_TAG_DIV { return 0; }
+    if vnode.parent_id != 0 { return 0; }
+    return 1;
+}
+
+fn test_component_rendering(): i64 {
+    let comp: WebbixComponent;
+    webbix_component_init(&comp, 1, 2, 10);
+    
+    let root_node: WebbixVNode;
+    webbix_vnode_init(&root_node, 201, WEBMIX_TAG_SECTION, 0);
+    
+    webbix_component_render(&comp, &root_node, 42);
+    if comp.root_node_id != 201 { return 0; }
+    if root_node.state_ref != 42 { return 0; }
+    if root_node.is_rendered != 1 { return 0; }
+    return 1;
+}
+
+fn test_reactive_state(): i64 {
+    let store: WebbixStateStore;
+    webbix_state_init(&store, 1);
+    if webbix_state_get(&store, 10) != 0 { return 0; }
+    if webbix_state_is_dirty(&store) != 0 { return 0; }
+    
+    webbix_state_set(&store, 10, 100);
+    if webbix_state_get(&store, 10) != 100 { return 0; }
+    if webbix_state_is_dirty(&store) != 1 { return 0; }
+    
+    webbix_state_clear_dirty(&store);
+    if webbix_state_is_dirty(&store) != 0 { return 0; }
+    
+    let inc_val = webbix_state_increment(&store, 10);
+    if inc_val != 101 { return 0; }
+    if webbix_state_get(&store, 10) != 101 { return 0; }
+    
+    let dec_val = webbix_state_decrement(&store, 10);
+    if dec_val != 100 { return 0; }
+    if webbix_state_get(&store, 10) != 100 { return 0; }
+    return 1;
+}
+
+fn test_event_handling(): i64 {
+    let node: WebbixVNode;
+    webbix_vnode_init(&node, 301, WEBMIX_TAG_BUTTON, 0);
+    
+    if webbix_vnode_has_listener(&node, WEBMIX_EVENT_CLICK) != 0 { return 0; }
+    webbix_vnode_add_listener(&node, WEBMIX_EVENT_CLICK);
+    if webbix_vnode_has_listener(&node, WEBMIX_EVENT_CLICK) != 1 { return 0; }
+    if webbix_vnode_has_listener(&node, WEBMIX_EVENT_INPUT) != 0 { return 0; }
+    
+    let client: WebbixClientContext;
+    webbix_client_init(&client, 1);
+    webbix_client_dispatch_event(&client, node.node_id, WEBMIX_EVENT_CLICK, 99);
+    
+    if webbix_client_verify_event(&client, 301, WEBMIX_EVENT_CLICK) != 1 { return 0; }
+    if webbix_client_verify_event(&client, 301, WEBMIX_EVENT_INPUT) != 0 { return 0; }
+    return 1;
+}
+
+fn test_routing(): i64 {
+    let router: WebbixRouter;
+    webbix_router_init(&router);
+    
+    let route_home: WebbixRoute;
+    webbix_router_add(&router, &route_home, 1, 1, 10, WEBMIX_METHOD_GET);
+    
+    let route_about: WebbixRoute;
+    webbix_router_add(&router, &route_about, 2, 2, 20, WEBMIX_METHOD_GET);
+    
+    if router.route_count != 2 { return 0; }
+    
+    let res_home = webbix_router_resolve(&route_home, 1, WEBMIX_METHOD_GET);
+    if res_home != 10 { return 0; }
+    
+    let res_about = webbix_router_resolve(&route_about, 2, WEBMIX_METHOD_GET);
+    if res_about != 20 { return 0; }
+    
+    let res_unknown = webbix_router_resolve(&route_home, 99, WEBMIX_METHOD_GET);
+    if res_unknown != -1 { return 0; }
+    return 1;
+}
+
+fn test_basic_http(): i64 {
+    let req: WebbixRequest;
+    webbix_request_init(&req, 1, WEBMIX_METHOD_GET, 1);
+    
+    let res: WebbixResponse;
+    webbix_http_handle_route(&res, &req, 10);
+    if res.status != 200 { return 0; }
+    if res.content_type != WEBMIX_MIME_HTML { return 0; }
+    if res.body_len <= 0 { return 0; }
+    
+    let req_404: WebbixRequest;
+    webbix_request_init(&req_404, 2, WEBMIX_METHOD_GET, 99);
+    let res_404: WebbixResponse;
+    webbix_http_handle_route(&res_404, &req_404, -1);
+    if res_404.status != 404 { return 0; }
+    return 1;
+}
+
+fn test_html_serialization(): i64 {
+    let len = webbix_runtime_serialize_tag_len(WEBMIX_TAG_BUTTON, 8);
+    if len != 25 { return 0; }
+    
+    let tag = webbix_runtime_tag_name(WEBMIX_TAG_H1);
+    if tag != "h1" { return 0; }
+    return 1;
+}
+
+fn test_component_composition(): i64 {
+    let parent: WebbixComponent;
+    webbix_component_init(&parent, 1, 1, 0);
+    
+    let child_header: WebbixComponent;
+    webbix_component_init(&child_header, 2, 2, 0);
+    
+    let child_counter: WebbixComponent;
+    webbix_component_init(&child_counter, 3, 3, 10);
+    
+    webbix_component_compose_child(&parent, &child_header);
+    webbix_component_compose_child(&parent, &child_counter);
+    
+    if parent.child_comp_count != 2 { return 0; }
+    return 1;
+}
+
+fn test_platform_syscalls(): i64 {
+    let disp: PlatformDispatcher;
+    let init_res = webbix_platform_init(&disp);
+    if init_res < 0 { return 0; }
+    if disp.is_initialized != 1 { return 0; }
+
+    # Test sys_getpid (39)
+    let pid = webbix_platform_syscall(&disp, 39, 0, 0, 0, 0, 0);
+    if pid <= 0 {
+        webbix_platform_destroy(&disp);
+        return 0;
+    }
+
+    # Test raw socket syscall (41: AF_INET, SOCK_STREAM, 0)
+    let sock = webbix_platform_syscall(&disp, LINUX_SYS_SOCKET, AF_INET, SOCK_STREAM, 0, 0, 0);
+    if sock <= 0 {
+        webbix_platform_destroy(&disp);
+        return 0;
+    }
+    sys_close(sock);
+
+    webbix_platform_destroy(&disp);
+    if disp.is_initialized != 0 { return 0; }
+    return 1;
+}
+
+fn test_socket_abstraction(): i64 {
+    let disp: PlatformDispatcher;
+    let init_res = webbix_platform_init(&disp);
+    if init_res < 0 { return 0; }
+
+    let sock: WebbixSocket;
+    let create_res = webbix_socket_create(&sock, &disp, AF_INET, SOCK_STREAM, 0);
+    if create_res < 0 {
+        webbix_platform_destroy(&disp);
+        return 0;
+    }
+
+    webbix_socket_set_reuseaddr(&sock, &disp);
+
+    let bind_res = webbix_socket_bind(&sock, &disp, 8097);
+    if bind_res < 0 {
+        webbix_socket_close(&sock);
+        webbix_platform_destroy(&disp);
+        return 0;
+    }
+    if sock.bound_port != 8097 { return 0; }
+
+    let listen_res = webbix_socket_listen(&sock, &disp, 16);
+    if listen_res < 0 {
+        webbix_socket_close(&sock);
+        webbix_platform_destroy(&disp);
+        return 0;
+    }
+    if sock.is_listening != 1 { return 0; }
+
+    webbix_socket_close(&sock);
+    if sock.fd != -1 { return 0; }
+
+    webbix_platform_destroy(&disp);
+    return 1;
+}
+
+fn test_server_engine(): i64 {
+    let server: WebbixServer;
+    let res = webbix_server_init(&server, 8098);
+    if res < 0 { return 0; }
+    if server.is_active != 1 { return 0; }
+    if server.port != 8098 { return 0; }
+
+    webbix_server_close(&server);
+    if server.is_active != 0 { return 0; }
+    return 1;
+}
+
+fn main(): i64 {
+    let t1 = test_application_creation();
+    let t2 = test_component_creation();
+    let t3 = test_component_rendering();
+    let t4 = test_reactive_state();
+    let t5 = test_event_handling();
+    let t6 = test_routing();
+    let t7 = test_basic_http();
+    let t8 = test_html_serialization();
+    let t9 = test_component_composition();
+    let t10 = test_platform_syscalls();
+    let t11 = test_socket_abstraction();
+    let t12 = test_server_engine();
+    
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+    if total == 12 {
+        return 42; # Success
+    }
+    return -total;
+}

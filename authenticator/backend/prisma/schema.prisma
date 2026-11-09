@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                 String                 @unique @db.VarChar(255)
+  passwordHash          String?                @map("password_hash") @db.VarChar(255)
+  fullName              String?                @map("full_name") @db.VarChar(255)
+  avatarUrl             String?                @map("avatar_url")
+  securityScore         Int?                   @default(0) @map("security_score")
+  isPremium             Boolean?               @default(false) @map("is_premium")
+  mfaEnabled            Boolean?               @default(false) @map("mfa_enabled")
+  createdAt             DateTime?              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime?              @default(now()) @map("updated_at") @db.Timestamptz
+
+  devices               Device[]
+  sessions              Session[]
+  ownedWorkspaces       Workspace[]            @relation("WorkspaceOwner")
+  workspaceMemberships  WorkspaceMember[]
+  authenticatorAccounts AuthenticatorAccount[]
+  vaultItems            VaultItem[]
+
+  @@map("users")
+}
+
+model Device {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  deviceName   String    @map("device_name") @db.VarChar(255)
+  osType       String?   @map("os_type") @db.VarChar(50)
+  fcmToken     String?   @map("fcm_token")
+  lastActive   DateTime? @default(now()) @map("last_active") @db.Timestamptz
+  isTrusted    Boolean?  @default(false) @map("is_trusted")
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz
+
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+
+  @@map("devices")
+}
+
+model Session {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  deviceId     String?   @map("device_id") @db.Uuid
+  refreshToken String    @unique @map("refresh_token")
+  ipAddress    String?   @map("ip_address") @db.Inet
+  userAgent    String?   @map("user_agent")
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz
+
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device       Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@map("sessions")
+}
+
+model Workspace {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId      String?   @map("owner_id") @db.Uuid
+  name         String    @db.VarChar(255)
+  billingEmail String?   @map("billing_email") @db.VarChar(255)
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime? @default(now()) @map("updated_at") @db.Timestamptz
+
+  owner        User?     @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  members      WorkspaceMember[]
+  accounts     AuthenticatorAccount[]
+  items        VaultItem[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String?   @map("workspace_id") @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  role         String    @default("member") @db.VarChar(50)
+  joinedAt     DateTime? @default(now()) @map("joined_at") @db.Timestamptz
+
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model AuthenticatorAccount {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String?   @map("user_id") @db.Uuid
+  workspaceId          String?   @map("workspace_id") @db.Uuid
+  issuer               String    @db.VarChar(255)
+  accountName          String    @map("account_name") @db.VarChar(255)
+  encryptedSecret      String    @map("encrypted_secret")
+  algorithm            String?   @default("SHA1") @db.VarChar(20)
+  digits               Int?      @default(6)
+  period               Int?      @default(30)
+  iconUrl              String?   @map("icon_url")
+  createdAt            DateTime? @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime? @default(now()) @map("updated_at") @db.Timestamptz
+
+  user                 User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace            Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("authenticator_accounts")
+}
+
+model VaultItem {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String?   @map("user_id") @db.Uuid
+  workspaceId          String?   @map("workspace_id") @db.Uuid
+  itemType             String    @map("item_type") @db.VarChar(50)
+  title                String    @db.VarChar(255)
+  encryptedPayload     String    @map("encrypted_payload")
+  isFavorite           Boolean?  @default(false) @map("is_favorite")
+  createdAt            DateTime? @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime? @default(now()) @map("updated_at") @db.Timestamptz
+
+  user                 User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace            Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("vault_items")
+}

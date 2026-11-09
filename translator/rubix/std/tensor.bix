@@ -1,0 +1,737 @@
+# ==============================================================================
+# Rubix Standard Library: Tensor Operations (std/tensor.bix)
+# ==============================================================================
+# Integer and Quantized Tensor Operations for AI / LLM Inference.
+# Fully self-contained native memory layout, zero external dependencies.
+#
+# ARCHITECTURE:
+# Contiguous memory buffer allocated via sys_mmap with 64-byte metadata header.
+# Elements stored in row-major (C-contiguous) format.
+#
+# Tensor header layout:
+#   [0..7]   = ndim (number of dimensions, 1 to 4)
+#   [8..15]  = dtype (1=i8, 2=i32, 3=i64)
+#   [16..23] = dim0
+#   [24..31] = dim1
+#   [32..39] = dim2
+#   [40..47] = dim3
+#   [48..55] = numel (total elements)
+#   [56..63] = elsize (bytes per element)
+#   [64..]   = payload
+# ==============================================================================
+
+let DTYPE_I8  = 1;
+let DTYPE_I32 = 2;
+let DTYPE_I64 = 3;
+
+let TENSOR_HEADER_SIZE = 64;
+let TENSOR_OFF_NDIM    = 0;
+let TENSOR_OFF_DTYPE   = 8;
+let TENSOR_OFF_DIM0    = 16;
+let TENSOR_OFF_DIM1    = 24;
+let TENSOR_OFF_DIM2    = 32;
+let TENSOR_OFF_DIM3    = 40;
+let TENSOR_OFF_NUMEL   = 48;
+let TENSOR_OFF_ELSIZE  = 56;
+
+# --- Allocation and Lifecycle ---
+
+fn tensor_dtype_size(dtype: i64): i64 {
+    if dtype == DTYPE_I8  { return 1; }
+    if dtype == DTYPE_I32 { return 4; }
+    if dtype == DTYPE_I64 { return 8; }
+    return 0;
+}
+
+fn tensor_create_1d(dim0: i64, dtype: i64): i64 {
+    let el_size = tensor_dtype_size(dtype);
+    let total = dim0;
+    let buf_size = TENSOR_HEADER_SIZE + total * el_size;
+    let buf = sys_mmap(0, buf_size, 3, 34, -1, 0);
+    set_qword(buf, TENSOR_OFF_NDIM, 1);
+    set_qword(buf, TENSOR_OFF_DTYPE, dtype);
+    set_qword(buf, TENSOR_OFF_DIM0, dim0);
+    set_qword(buf, TENSOR_OFF_DIM1, 0);
+    set_qword(buf, TENSOR_OFF_DIM2, 0);
+    set_qword(buf, TENSOR_OFF_DIM3, 0);
+    set_qword(buf, TENSOR_OFF_NUMEL, total);
+    set_qword(buf, TENSOR_OFF_ELSIZE, el_size);
+    return buf;
+}
+
+fn tensor_create_2d(dim0: i64, dim1: i64, dtype: i64): i64 {
+    let el_size = tensor_dtype_size(dtype);
+    let total = dim0 * dim1;
+    let buf_size = TENSOR_HEADER_SIZE + total * el_size;
+    let buf = sys_mmap(0, buf_size, 3, 34, -1, 0);
+    set_qword(buf, TENSOR_OFF_NDIM, 2);
+    set_qword(buf, TENSOR_OFF_DTYPE, dtype);
+    set_qword(buf, TENSOR_OFF_DIM0, dim0);
+    set_qword(buf, TENSOR_OFF_DIM1, dim1);
+    set_qword(buf, TENSOR_OFF_DIM2, 0);
+    set_qword(buf, TENSOR_OFF_DIM3, 0);
+    set_qword(buf, TENSOR_OFF_NUMEL, total);
+    set_qword(buf, TENSOR_OFF_ELSIZE, el_size);
+    return buf;
+}
+
+fn tensor_create_3d(dim0: i64, dim1: i64, dim2: i64, dtype: i64): i64 {
+    let el_size = tensor_dtype_size(dtype);
+    let total = dim0 * dim1 * dim2;
+    let buf_size = TENSOR_HEADER_SIZE + total * el_size;
+    let buf = sys_mmap(0, buf_size, 3, 34, -1, 0);
+    set_qword(buf, TENSOR_OFF_NDIM, 3);
+    set_qword(buf, TENSOR_OFF_DTYPE, dtype);
+    set_qword(buf, TENSOR_OFF_DIM0, dim0);
+    set_qword(buf, TENSOR_OFF_DIM1, dim1);
+    set_qword(buf, TENSOR_OFF_DIM2, dim2);
+    set_qword(buf, TENSOR_OFF_DIM3, 0);
+    set_qword(buf, TENSOR_OFF_NUMEL, total);
+    set_qword(buf, TENSOR_OFF_ELSIZE, el_size);
+    return buf;
+}
+
+fn tensor_create_4d(dim0: i64, dim1: i64, dim2: i64, dim3: i64, dtype: i64): i64 {
+    let el_size = tensor_dtype_size(dtype);
+    let total = dim0 * dim1 * dim2 * dim3;
+    let buf_size = TENSOR_HEADER_SIZE + total * el_size;
+    let buf = sys_mmap(0, buf_size, 3, 34, -1, 0);
+    set_qword(buf, TENSOR_OFF_NDIM, 4);
+    set_qword(buf, TENSOR_OFF_DTYPE, dtype);
+    set_qword(buf, TENSOR_OFF_DIM0, dim0);
+    set_qword(buf, TENSOR_OFF_DIM1, dim1);
+    set_qword(buf, TENSOR_OFF_DIM2, dim2);
+    set_qword(buf, TENSOR_OFF_DIM3, dim3);
+    set_qword(buf, TENSOR_OFF_NUMEL, total);
+    set_qword(buf, TENSOR_OFF_ELSIZE, el_size);
+    return buf;
+}
+
+# --- Metadata Access ---
+
+fn tensor_ndim(t: i64): i64 { return get_qword(t, TENSOR_OFF_NDIM); }
+fn tensor_dtype(t: i64): i64 { return get_qword(t, TENSOR_OFF_DTYPE); }
+fn tensor_numel(t: i64): i64 { return get_qword(t, TENSOR_OFF_NUMEL); }
+fn tensor_elsize(t: i64): i64 { return get_qword(t, TENSOR_OFF_ELSIZE); }
+fn tensor_data_ptr(t: i64): i64 { return t + TENSOR_HEADER_SIZE; }
+
+fn tensor_dim(t: i64, axis: i64): i64 {
+    if axis == 0 { return get_qword(t, TENSOR_OFF_DIM0); }
+    if axis == 1 { return get_qword(t, TENSOR_OFF_DIM1); }
+    if axis == 2 { return get_qword(t, TENSOR_OFF_DIM2); }
+    if axis == 3 { return get_qword(t, TENSOR_OFF_DIM3); }
+    return 0;
+}
+
+# --- Element Access (i8) ---
+
+fn tensor_get_i8(t: i64, idx: i64): i64 {
+    let val = get_byte(t, TENSOR_HEADER_SIZE + idx);
+    if val >= 128 { return val - 256; }
+    return val;
+}
+
+fn tensor_set_i8(t: i64, idx: i64, val: i64): void {
+    let byte_val = val;
+    if byte_val < 0 { byte_val = byte_val + 256; }
+    set_byte(t, TENSOR_HEADER_SIZE + idx, byte_val);
+}
+
+fn tensor_get_2d_i8(t: i64, row: i64, col: i64): i64 {
+    let cols = tensor_dim(t, 1);
+    return tensor_get_i8(t, row * cols + col);
+}
+
+fn tensor_set_2d_i8(t: i64, row: i64, col: i64, val: i64): void {
+    let cols = tensor_dim(t, 1);
+    tensor_set_i8(t, row * cols + col, val);
+}
+
+fn tensor_get_3d_i8(t: i64, d0: i64, d1: i64, d2: i64): i64 {
+    let s1 = tensor_dim(t, 1);
+    let s2 = tensor_dim(t, 2);
+    let idx = (d0 * s1 * s2) + (d1 * s2) + d2;
+    return tensor_get_i8(t, idx);
+}
+
+fn tensor_set_3d_i8(t: i64, d0: i64, d1: i64, d2: i64, val: i64): void {
+    let s1 = tensor_dim(t, 1);
+    let s2 = tensor_dim(t, 2);
+    let idx = (d0 * s1 * s2) + (d1 * s2) + d2;
+    tensor_set_i8(t, idx, val);
+}
+
+# --- Element Access (i32, Little-Endian) ---
+
+fn tensor_get_i32(t: i64, idx: i64): i64 {
+    let off = TENSOR_HEADER_SIZE + idx * 4;
+    let b0 = get_byte(t, off);
+    let b1 = get_byte(t, off + 1);
+    let b2 = get_byte(t, off + 2);
+    let b3 = get_byte(t, off + 3);
+    let val = b0 + b1 * 256 + b2 * 65536 + b3 * 16777216;
+    if val >= 2147483648 { val = val - 4294967296; }
+    return val;
+}
+
+fn tensor_set_i32(t: i64, idx: i64, val: i64): void {
+    let off = TENSOR_HEADER_SIZE + idx * 4;
+    let uval = val;
+    if uval < 0 { uval = uval + 4294967296; }
+    set_byte(t, off,     uval % 256);
+    set_byte(t, off + 1, (uval / 256) % 256);
+    set_byte(t, off + 2, (uval / 65536) % 256);
+    set_byte(t, off + 3, (uval / 16777216) % 256);
+}
+
+fn tensor_get_2d_i32(t: i64, row: i64, col: i64): i64 {
+    let cols = tensor_dim(t, 1);
+    return tensor_get_i32(t, row * cols + col);
+}
+
+fn tensor_set_2d_i32(t: i64, row: i64, col: i64, val: i64): void {
+    let cols = tensor_dim(t, 1);
+    tensor_set_i32(t, row * cols + col, val);
+}
+
+# --- Element Access (i64) ---
+
+fn tensor_get_i64(t: i64, idx: i64): i64 {
+    return get_qword(t, TENSOR_HEADER_SIZE + idx * 8);
+}
+
+fn tensor_set_i64(t: i64, idx: i64, val: i64): void {
+    set_qword(t, TENSOR_HEADER_SIZE + idx * 8, val);
+}
+
+# ==============================================================================
+# AI Kernels -- Quantized Linear Algebra & Transformer Ops
+# ==============================================================================
+
+# Scaled Int8 MatMul: C[M, N] = clamp((A[M, K] @ B[K, N]) * scale / 256, -128, 127)
+fn matmul_i8(a: i64, b: i64, c: i64, scale: i64): void {
+    let M = tensor_dim(a, 0);
+    let K = tensor_dim(a, 1);
+    let N = tensor_dim(b, 1);
+
+    let i = 0;
+    while i < M {
+        let j = 0;
+        while j < N {
+            let acc = 0;
+            let k = 0;
+            while k < K {
+                let a_val = tensor_get_2d_i8(a, i, k);
+                let b_val = tensor_get_2d_i8(b, k, j);
+                acc = acc + a_val * b_val;
+                k = k + 1;
+            }
+            let scaled = (acc * scale) / 256;
+            if scaled > 127 { scaled = 127; }
+            if scaled < -128 { scaled = -128; }
+            tensor_set_2d_i8(c, i, j, scaled);
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+# Int8 MatMul with i32 Accumulator Output (no truncation)
+fn matmul_i8_to_i32(a: i64, b: i64, c: i64): void {
+    let M = tensor_dim(a, 0);
+    let K = tensor_dim(a, 1);
+    let N = tensor_dim(b, 1);
+
+    let i = 0;
+    while i < M {
+        let j = 0;
+        while j < N {
+            let acc = 0;
+            let k = 0;
+            while k < K {
+                let a_val = tensor_get_2d_i8(a, i, k);
+                let b_val = tensor_get_2d_i8(b, k, j);
+                acc = acc + a_val * b_val;
+                k = k + 1;
+            }
+            tensor_set_2d_i32(c, i, j, acc);
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+# Int8 MatMul with Bias Addition: C[M, N] = clamp((A @ B) * scale / 256 + bias[N], -128, 127)
+fn matmul_i8_bias(a: i64, b: i64, bias: i64, c: i64, scale: i64): void {
+    let M = tensor_dim(a, 0);
+    let K = tensor_dim(a, 1);
+    let N = tensor_dim(b, 1);
+
+    let i = 0;
+    while i < M {
+        let j = 0;
+        while j < N {
+            let acc = 0;
+            let k = 0;
+            while k < K {
+                acc = acc + tensor_get_2d_i8(a, i, k) * tensor_get_2d_i8(b, k, j);
+                k = k + 1;
+            }
+            let scaled = (acc * scale) / 256;
+            let b_val = tensor_get_i8(bias, j);
+            let out_val = scaled + b_val;
+            if out_val > 127 { out_val = 127; }
+            if out_val < -128 { out_val = -128; }
+            tensor_set_2d_i8(c, i, j, out_val);
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+# 1D Vector Dot Product: acc = sum(A[i] * B[i])
+fn dot_i8(a: i64, b: i64, len: i64): i64 {
+    let acc = 0;
+    let i = 0;
+    while i < len {
+        acc = acc + tensor_get_i8(a, i) * tensor_get_i8(b, i);
+        i = i + 1;
+    }
+    return acc;
+}
+
+# Tensor Fill Operations
+fn tensor_fill_i8(t: i64, val: i64): void {
+    let n = tensor_numel(t);
+    let i = 0;
+    while i < n {
+        tensor_set_i8(t, i, val);
+        i = i + 1;
+    }
+}
+
+fn tensor_fill_i32(t: i64, val: i64): void {
+    let n = tensor_numel(t);
+    let i = 0;
+    while i < n {
+        tensor_set_i32(t, i, val);
+        i = i + 1;
+    }
+}
+
+fn tensor_copy_i8(src: i64, dst: i64, len: i64): void {
+    let i = 0;
+    while i < len {
+        tensor_set_i8(dst, i, tensor_get_i8(src, i));
+        i = i + 1;
+    }
+}
+
+# ReLU: max(0, x)
+fn relu_i8(t: i64): void {
+    let n = tensor_numel(t);
+    let i = 0;
+    while i < n {
+        let v = tensor_get_i8(t, i);
+        if v < 0 { tensor_set_i8(t, i, 0); }
+        i = i + 1;
+    }
+}
+
+# Clipped ReLU: clamp(x, 0, cap)
+fn relu6_i8(t: i64, cap: i64): void {
+    let n = tensor_numel(t);
+    let i = 0;
+    while i < n {
+        let v = tensor_get_i8(t, i);
+        if v < 0 { tensor_set_i8(t, i, 0); }
+        if v > cap { tensor_set_i8(t, i, cap); }
+        i = i + 1;
+    }
+}
+
+# Approximate GeLU for integer activations
+fn gelu_approx_i8(t: i64): void {
+    let n = tensor_numel(t);
+    let i = 0;
+    while i < n {
+        let x = tensor_get_i8(t, i);
+        let res = 0;
+        if x <= -40 {
+            res = 0;
+        }
+        if (x > -40) & (x < 30) {
+            # Piecewise smooth approximation around zero
+            let shifted = x + 40;
+            res = (x * shifted) / 70;
+        }
+        if x >= 30 {
+            res = x;
+        }
+        if res > 127 { res = 127; }
+        if res < -128 { res = -128; }
+        tensor_set_i8(t, i, res);
+        i = i + 1;
+    }
+}
+
+# Softmax Approximation for Quantized Logits
+fn softmax_approx_i8(logits: i64, output: i64, len: i64): void {
+    let max_val = tensor_get_i8(logits, 0);
+    let i = 1;
+    while i < len {
+        let v = tensor_get_i8(logits, i);
+        if v > max_val { max_val = v; }
+        i = i + 1;
+    }
+
+    let sum = 0;
+    i = 0;
+    while i < len {
+        let shifted = tensor_get_i8(logits, i) - max_val;
+        let exp_approx = 127 + shifted;
+        if exp_approx < 0 { exp_approx = 0; }
+        tensor_set_i8(output, i, exp_approx);
+        sum = sum + exp_approx;
+        i = i + 1;
+    }
+
+    if sum > 0 {
+        i = 0;
+        while i < len {
+            let v = tensor_get_i8(output, i);
+            let normed = (v * 127) / sum;
+            tensor_set_i8(output, i, normed);
+            i = i + 1;
+        }
+    }
+}
+
+# Element-wise Addition: out[i] = clamp(a[i] + b[i], -128, 127)
+fn tensor_add_i8(a: i64, b: i64, out: i64): void {
+    let n = tensor_numel(a);
+    let i = 0;
+    while i < n {
+        let sum = tensor_get_i8(a, i) + tensor_get_i8(b, i);
+        if sum > 127 { sum = 127; }
+        if sum < -128 { sum = -128; }
+        tensor_set_i8(out, i, sum);
+        i = i + 1;
+    }
+}
+
+# Scalar Scale with Bit-Shift: out[i] = clamp((a[i] * scale) / (2^shift), -128, 127)
+fn tensor_scale_i8(a: i64, out: i64, scale: i64, shift: i64): void {
+    let n = tensor_numel(a);
+    let divisor = 1;
+    let s = 0;
+    while s < shift {
+        divisor = divisor * 2;
+        s = s + 1;
+    }
+    let i = 0;
+    while i < n {
+        let v = (tensor_get_i8(a, i) * scale) / divisor;
+        if v > 127 { v = 127; }
+        if v < -128 { v = -128; }
+        tensor_set_i8(out, i, v);
+        i = i + 1;
+    }
+}
+
+# Argmax: Returns index of largest element
+fn tensor_argmax_i8(t: i64, len: i64): i64 {
+    let best_idx = 0;
+    let best_val = tensor_get_i8(t, 0);
+    let i = 1;
+    while i < len {
+        let v = tensor_get_i8(t, i);
+        if v > best_val {
+            best_val = v;
+            best_idx = i;
+        }
+        i = i + 1;
+    }
+    return best_idx;
+}
+
+# Sum Reduction
+fn tensor_sum_i8(t: i64, len: i64): i64 {
+    let acc = 0;
+    let i = 0;
+    while i < len {
+        acc = acc + tensor_get_i8(t, i);
+        i = i + 1;
+    }
+    return acc;
+}
+
+# Layer Normalization: out[i] = clamp((x[i] - mean) * gamma / divisor, -128, 127)
+fn layernorm_approx_i8(input: i64, output: i64, len: i64, gamma: i64, divisor: i64): void {
+    if len <= 0 { return; }
+    let mean = tensor_sum_i8(input, len) / len;
+    let i = 0;
+    while i < len {
+        let centered = tensor_get_i8(input, i) - mean;
+        let scaled = (centered * gamma) / divisor;
+        if scaled > 127 { scaled = 127; }
+        if scaled < -128 { scaled = -128; }
+        tensor_set_i8(output, i, scaled);
+        i = i + 1;
+    }
+}
+
+# Token Embedding Table Lookup: copies row `token_id` of length `hidden_dim` into `out`
+fn embedding_lookup_i8(weight: i64, token_id: i64, out: i64, hidden_dim: i64): void {
+    let i = 0;
+    while i < hidden_dim {
+        let v = tensor_get_2d_i8(weight, token_id, i);
+        tensor_set_i8(out, i, v);
+        i = i + 1;
+    }
+}
+
+# Multi-Head Attention Score: dot product between Query vector Q and Key vector K_seq
+fn attention_score_i8(q: i64, k: i64, scores: i64, seq_len: i64, head_dim: i64, scale: i64): void {
+    let s = 0;
+    while s < seq_len {
+        let dot = 0;
+        let d = 0;
+        while d < head_dim {
+            let q_val = tensor_get_i8(q, d);
+            let k_val = tensor_get_2d_i8(k, s, d);
+            dot = dot + q_val * k_val;
+            d = d + 1;
+        }
+        let scaled_dot = (dot * scale) / 256;
+        if scaled_dot > 127 { scaled_dot = 127; }
+        if scaled_dot < -128 { scaled_dot = -128; }
+        tensor_set_i8(scores, s, scaled_dot);
+        s = s + 1;
+    }
+}
+
+# --- High-Performance Tiled & Vectorized AI Kernels ---
+
+# Cache-Tiled Int8 MatMul: Blocks M, N, K into cache-friendly sub-matrices (tile_size x tile_size)
+# Uses row-major memory streaming (i -> k -> j loop interchange) and unrolled inner accumulators.
+fn matmul_i8_tiled(a: i64, b: i64, c: i64, scale: i64, tile_size: i64): void {
+    let M = tensor_dim(a, 0);
+    let K = tensor_dim(a, 1);
+    let N = tensor_dim(b, 1);
+    let ts = tile_size;
+    if ts <= 0 { ts = 16; }
+
+    let total_c = M * N;
+    let ci = 0;
+    while ci < total_c {
+        tensor_set_i8(c, ci, 0);
+        ci = ci + 1;
+    }
+
+    let a_ptr = tensor_data_ptr(a);
+    let b_ptr = tensor_data_ptr(b);
+    let c_ptr = tensor_data_ptr(c);
+
+    let ii = 0;
+    while ii < M {
+        let i_end = ii + ts;
+        if i_end > M { i_end = M; }
+
+        let kk = 0;
+        while kk < K {
+            let k_end = kk + ts;
+            if k_end > K { k_end = K; }
+
+            let jj = 0;
+            while jj < N {
+                let j_end = jj + ts;
+                if j_end > N { j_end = N; }
+
+                let i = ii;
+                while i < i_end {
+                    let k = kk;
+                    while k < k_end {
+                        let a_val = get_byte(a_ptr, i * K + k);
+                        if a_val >= 128 { a_val = a_val - 256; }
+
+                        let j = jj;
+                        while j + 3 < j_end {
+                            let b0 = get_byte(b_ptr, k * N + j);     if b0 >= 128 { b0 = b0 - 256; }
+                            let b1 = get_byte(b_ptr, k * N + j + 1); if b1 >= 128 { b1 = b1 - 256; }
+                            let b2 = get_byte(b_ptr, k * N + j + 2); if b2 >= 128 { b2 = b2 - 256; }
+                            let b3 = get_byte(b_ptr, k * N + j + 3); if b3 >= 128 { b3 = b3 - 256; }
+
+                            let c_idx = i * N + j;
+                            let c0 = get_byte(c_ptr, c_idx);     if c0 >= 128 { c0 = c0 - 256; }
+                            let c1 = get_byte(c_ptr, c_idx + 1); if c1 >= 128 { c1 = c1 - 256; }
+                            let c2 = get_byte(c_ptr, c_idx + 2); if c2 >= 128 { c2 = c2 - 256; }
+                            let c3 = get_byte(c_ptr, c_idx + 3); if c3 >= 128 { c3 = c3 - 256; }
+
+                            c0 = c0 + a_val * b0;
+                            c1 = c1 + a_val * b1;
+                            c2 = c2 + a_val * b2;
+                            c3 = c3 + a_val * b3;
+
+                            let bc0 = c0; if bc0 < 0 { bc0 = bc0 + 256; } set_byte(c_ptr, c_idx, bc0);
+                            let bc1 = c1; if bc1 < 0 { bc1 = bc1 + 256; } set_byte(c_ptr, c_idx + 1, bc1);
+                            let bc2 = c2; if bc2 < 0 { bc2 = bc2 + 256; } set_byte(c_ptr, c_idx + 2, bc2);
+                            let bc3 = c3; if bc3 < 0 { bc3 = bc3 + 256; } set_byte(c_ptr, c_idx + 3, bc3);
+                            j = j + 4;
+                        }
+                        while j < j_end {
+                            let bv = get_byte(b_ptr, k * N + j); if bv >= 128 { bv = bv - 256; }
+                            let cv = get_byte(c_ptr, i * N + j); if cv >= 128 { cv = cv - 256; }
+                            cv = cv + a_val * bv;
+                            let bcv = cv; if bcv < 0 { bcv = bcv + 256; }
+                            set_byte(c_ptr, i * N + j, bcv);
+                            j = j + 1;
+                        }
+                        k = k + 1;
+                    }
+                    i = i + 1;
+                }
+                jj = jj + ts;
+            }
+            kk = kk + ts;
+        }
+        ii = ii + ts;
+    }
+
+    let p = 0;
+    while p < total_c {
+        let val = get_byte(c_ptr, p);
+        if val >= 128 { val = val - 256; }
+        let sc = (val * scale) / 256;
+        if sc > 127 { sc = 127; }
+        if sc < -128 { sc = -128; }
+        let bsc = sc;
+        if bsc < 0 { bsc = bsc + 256; }
+        set_byte(c_ptr, p, bsc);
+        p = p + 1;
+    }
+}
+
+# 8-Way Parallel Vector Dot Product: breaks accumulator latency dependencies
+fn dot_i8_simd(a: i64, b: i64, len: i64): i64 {
+    let a_ptr = tensor_data_ptr(a);
+    let b_ptr = tensor_data_ptr(b);
+    let acc0 = 0;
+    let acc1 = 0;
+    let acc2 = 0;
+    let acc3 = 0;
+    let i = 0;
+    while i + 7 < len {
+        let a0 = get_byte(a_ptr, i);     if a0 >= 128 { a0 = a0 - 256; }
+        let b0 = get_byte(b_ptr, i);     if b0 >= 128 { b0 = b0 - 256; }
+        let a1 = get_byte(a_ptr, i + 1); if a1 >= 128 { a1 = a1 - 256; }
+        let b1 = get_byte(b_ptr, i + 1); if b1 >= 128 { b1 = b1 - 256; }
+        let a2 = get_byte(a_ptr, i + 2); if a2 >= 128 { a2 = a2 - 256; }
+        let b2 = get_byte(b_ptr, i + 2); if b2 >= 128 { b2 = b2 - 256; }
+        let a3 = get_byte(a_ptr, i + 3); if a3 >= 128 { a3 = a3 - 256; }
+        let b3 = get_byte(b_ptr, i + 3); if b3 >= 128 { b3 = b3 - 256; }
+        let a4 = get_byte(a_ptr, i + 4); if a4 >= 128 { a4 = a4 - 256; }
+        let b4 = get_byte(b_ptr, i + 4); if b4 >= 128 { b4 = b4 - 256; }
+        let a5 = get_byte(a_ptr, i + 5); if a5 >= 128 { a5 = a5 - 256; }
+        let b5 = get_byte(b_ptr, i + 5); if b5 >= 128 { b5 = b5 - 256; }
+        let a6 = get_byte(a_ptr, i + 6); if a6 >= 128 { a6 = a6 - 256; }
+        let b6 = get_byte(b_ptr, i + 6); if b6 >= 128 { b6 = b6 - 256; }
+        let a7 = get_byte(a_ptr, i + 7); if a7 >= 128 { a7 = a7 - 256; }
+        let b7 = get_byte(b_ptr, i + 7); if b7 >= 128 { b7 = b7 - 256; }
+
+        acc0 = acc0 + (a0 * b0) + (a1 * b1);
+        acc1 = acc1 + (a2 * b2) + (a3 * b3);
+        acc2 = acc2 + (a4 * b4) + (a5 * b5);
+        acc3 = acc3 + (a6 * b6) + (a7 * b7);
+        i = i + 8;
+    }
+    let acc = acc0 + acc1 + acc2 + acc3;
+    while i < len {
+        let av = get_byte(a_ptr, i); if av >= 128 { av = av - 256; }
+        let bv = get_byte(b_ptr, i); if bv >= 128 { bv = bv - 256; }
+        acc = acc + av * bv;
+        i = i + 1;
+    }
+    return acc;
+}
+
+# Fused Linear + Bias + ReLU Kernel (eliminates intermediate memory writebacks)
+fn matmul_add_relu_i8(a: i64, b: i64, bias: i64, c: i64, scale: i64): void {
+    let M = tensor_dim(a, 0);
+    let K = tensor_dim(a, 1);
+    let N = tensor_dim(b, 1);
+    let i = 0;
+    while i < M {
+        let j = 0;
+        while j < N {
+            let acc = 0;
+            let k = 0;
+            while k < K {
+                acc = acc + tensor_get_2d_i8(a, i, k) * tensor_get_2d_i8(b, k, j);
+                k = k + 1;
+            }
+            let scaled = (acc * scale) / 256;
+            let val = scaled + tensor_get_i8(bias, j);
+            if val < 0 { val = 0; }
+            if val > 127 { val = 127; }
+            tensor_set_2d_i8(c, i, j, val);
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+# Fused Multi-Head Attention: Q @ K_seq.T with inline Softmax and Value projection
+fn attention_score_fused_i8(q: i64, k: i64, v: i64, out: i64, seq_len: i64, head_dim: i64, scale: i64): void {
+    # 1. Compute dot products directly
+    let scores = sys_mmap(0, seq_len * 8, 3, 34, -1, 0);
+    let max_val = -128;
+    let s = 0;
+    while s < seq_len {
+        let dot = 0;
+        let d = 0;
+        while d < head_dim {
+            dot = dot + tensor_get_i8(q, d) * tensor_get_2d_i8(k, s, d);
+            d = d + 1;
+        }
+        let sc = (dot * scale) / 256;
+        if sc > max_val { max_val = sc; }
+        set_qword(scores, s, sc);
+        s = s + 1;
+    }
+
+    # 2. Inline exp and sum
+    let sum_exp = 0;
+    s = 0;
+    while s < seq_len {
+        let shifted = get_qword(scores, s) - max_val;
+        let exp_v = 127 + shifted;
+        if exp_v < 0 { exp_v = 0; }
+        set_qword(scores, s, exp_v);
+        sum_exp = sum_exp + exp_v;
+        s = s + 1;
+    }
+
+    # 3. Value projection directly into out
+    let d = 0;
+    while d < head_dim {
+        let weighted_sum = 0;
+        s = 0;
+        while s < seq_len {
+            let weight = get_qword(scores, s);
+            let v_val = tensor_get_2d_i8(v, s, d);
+            weighted_sum = weighted_sum + weight * v_val;
+            s = s + 1;
+        }
+        let final_val = 0;
+        if sum_exp > 0 {
+            final_val = weighted_sum / sum_exp;
+        }
+        if final_val > 127 { final_val = 127; }
+        if final_val < -128 { final_val = -128; }
+        tensor_set_i8(out, d, final_val);
+        d = d + 1;
+    }
+    sys_munmap(scores, seq_len * 8);
+}
+

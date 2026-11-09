@@ -1,0 +1,217 @@
+Start testing: Aug 23 19:04 +0545
+----------------------------------------------------------
+1/8 Testing: UtilsTest
+1/8 Test: UtilsTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_utils"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"UtilsTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+[2026-08-23 19:04:42] [32m[INF][0m Starting UtilsTest
+[2026-08-23 19:04:42] [36m[DBG][0m 50ms sleep took 50189791 ns
+[2026-08-23 19:04:42] [36m[DBG][0m Cycles elapsed: 134908438
+[2026-08-23 19:04:42] [32m[INF][0m UtilsTest passed.
+<end of output>
+Test time =   0.07 sec
+----------------------------------------------------------
+Test Passed.
+"UtilsTest" end time: Aug 23 19:04 +0545
+"UtilsTest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/8 Testing: CpuTest
+2/8 Test: CpuTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_cpu"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"CpuTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+Starting CPU detection test...
+Architecture: x86_64
+Logical: 12
+Physical: 8
+SSE2 Support: Yes
+CPU test passed.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"CpuTest" end time: Aug 23 19:04 +0545
+"CpuTest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/8 Testing: MemoryTest
+3/8 Test: MemoryTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_memory"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"MemoryTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+Starting Memory test...
+Allocated 2 MiB, mode: 1
+NUMA Available: 0, Nodes: 1
+Memory test passed.
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"MemoryTest" end time: Aug 23 19:04 +0545
+"MemoryTest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/8 Testing: Sha256dTest
+4/8 Test: Sha256dTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_sha256d"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"Sha256dTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+Starting SHA256d test...
+SHA256d tests passed.
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"Sha256dTest" end time: Aug 23 19:04 +0545
+"Sha256dTest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/8 Testing: Blake2bTest
+5/8 Test: Blake2bTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_blake2b"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"Blake2bTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+Starting BLAKE2b test...
+BLAKE2b tests passed.
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"Blake2bTest" end time: Aug 23 19:04 +0545
+"Blake2bTest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/8 Testing: AlgoBackendsTest
+6/8 Test: AlgoBackendsTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_algo_backends"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"AlgoBackendsTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+Differential testing for sha256d...
+  [Deterministic] sha-ni vs scalar...
+  [Batch boundaries] sha-ni vs scalar...
+  [Fuzz testing 2000 cases] sha-ni vs scalar...
+  [Deterministic] avx2 vs scalar...
+  [Batch boundaries] avx2 vs scalar...
+  [Fuzz testing 2000 cases] avx2 vs scalar...
+Differential testing for blake2b...
+  [Deterministic] avx2 vs scalar...
+  [Batch boundaries] avx2 vs scalar...
+  [Fuzz testing 2000 cases] avx2 vs scalar...
+All differential, batch, and fuzz tests passed successfully!
+<end of output>
+Test time =   1.80 sec
+----------------------------------------------------------
+Test Passed.
+"AlgoBackendsTest" end time: Aug 23 19:04 +0545
+"AlgoBackendsTest" time elapsed: 00:00:01
+----------------------------------------------------------
+
+7/8 Testing: WorkerTest
+7/8 Test: WorkerTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_worker"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"WorkerTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+Testing worker pool lifecycle...
+  [Paused] Active: 0, Paused: 4, Hashes: 332993
+  [Resumed] Active: 4, Hashes: 507214, Hashrate: 1.45 MH/s
+Lifecycle test passed!
+Testing rapid start/stop stress cycles...
+Rapid start/stop stress test passed!
+All worker engine tests passed successfully!
+<end of output>
+Test time =  11.04 sec
+----------------------------------------------------------
+Test Passed.
+"WorkerTest" end time: Aug 23 19:04 +0545
+"WorkerTest" time elapsed: 00:00:11
+----------------------------------------------------------
+
+8/8 Testing: AutotuneTest
+8/8 Test: AutotuneTest
+Command: "/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/test_autotune"
+Directory: /home/bishwaxyz/uqt/uqt-miner/build-asan/tests
+"AutotuneTest" start time: Aug 23 19:04 +0545
+Output:
+----------------------------------------------------------
+Starting Autotuner test on SHA-256d...
+========================================================================================
+                  uqt-miner Adaptive Thread & Backend Autotuner
+========================================================================================
+Target Algorithm:   sha256d
+Tuning Profile:     performance
+CPU Topology:       8 physical cores / 12 logical CPUs (P-Cores: 4, E-Cores: 4)
+========================================================================================
+
+Config #   Backend      Workers      Hashrate (MH/s) Evaluation     
+----------------------------------------------------------------------------------------
+1          sha-ni       1            1.00            ★ Best so far
+2          sha-ni       4            1.97            ★ Best so far
+3          sha-ni       8            2.95            ★ Best so far
+4          sha-ni       12           3.32            ★ Best so far
+5          avx2         1            0.27            Tested         
+6          avx2         4            0.80            Tested         
+7          avx2         8            1.22            Tested         
+8          avx2         12           1.43            Tested         
+9          scalar       1            0.11            Tested         
+10         scalar       4            0.30            Tested         
+11         scalar       8            0.48            Tested         
+12         scalar       12           0.56            Tested         
+----------------------------------------------------------------------------------------
+Autotune Winner Selected:
+  Backend:       sha-ni
+  Workers:       12
+  Peak Hashrate: 3.32 MH/s
+========================================================================================
+
+Starting Autotuner test on BLAKE2b...
+========================================================================================
+                  uqt-miner Adaptive Thread & Backend Autotuner
+========================================================================================
+Target Algorithm:   blake2b
+Tuning Profile:     balanced
+CPU Topology:       8 physical cores / 12 logical CPUs (P-Cores: 4, E-Cores: 4)
+========================================================================================
+
+Config #   Backend      Workers      Hashrate (MH/s) Evaluation     
+----------------------------------------------------------------------------------------
+1          avx2         1            0.31            ★ Best so far
+2          avx2         4            0.76            ★ Best so far
+3          avx2         8            1.21            ★ Best so far
+4          avx2         12           1.54            ★ Best so far
+5          scalar       1            0.30            Tested         
+6          scalar       4            0.72            Tested         
+7          scalar       8            1.14            Tested         
+8          scalar       12           1.65            ★ Best so far
+----------------------------------------------------------------------------------------
+Autotune Winner Selected:
+  Backend:       scalar
+  Workers:       12
+  Peak Hashrate: 1.65 MH/s
+========================================================================================
+
+All autotuner tests passed successfully!
+<end of output>
+Test time =  20.14 sec
+----------------------------------------------------------
+Test Passed.
+"AutotuneTest" end time: Aug 23 19:05 +0545
+"AutotuneTest" time elapsed: 00:00:20
+----------------------------------------------------------
+
+End testing: Aug 23 19:05 +0545

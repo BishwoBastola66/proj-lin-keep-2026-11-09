@@ -1,0 +1,429 @@
+# ==============================================================================
+# Webbix Web IR — Core Domain Types (webbix/ir/types.bix)
+# Pure Rubix domain types for native Web IR compilation.
+# Zero HTML or CSS dependencies.
+#
+# Foundational type system for the entire Webbix framework.
+# Every semantic web concept maps to a typed enum value.
+# Each enum has <= 32 variants (Rubix compiler enum table capacity).
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Semantic Node Kinds (Core HTML5 Semantic Coverage, max 32 variants)
+# ------------------------------------------------------------------------------
+enum WebKind {
+    App,
+    Page,
+    Header,
+    Nav,
+    NavLink,
+    Main,
+    Hero,
+    Title,
+    Heading,
+    Text,
+    Paragraph,
+    Button,
+    StatsGrid,
+    StatCard,
+    Section,
+    Article,
+    Aside,
+    Grid,
+    Flex,
+    ProjectCard,
+    Card,
+    Badge,
+    Form,
+    Label,
+    Input,
+    Footer,
+    List,
+    ListItem,
+    Table,
+    Image,
+    Modal,
+    EscapeHatch
+}
+
+# Extended node kinds represented as typed integer constants (0 overhead)
+let WEB_KIND_TABS     = 32;
+let WEB_KIND_PROGRESS = 33;
+let WEB_KIND_SPINNER  = 34;
+let WEB_KIND_DIVIDER  = 35;
+let WEB_KIND_TOAST    = 36;
+let WEB_KIND_TIMELINE = 37;
+
+# ------------------------------------------------------------------------------
+# Layout Modes
+# ------------------------------------------------------------------------------
+enum WebLayout {
+    Column,
+    Row,
+    Grid,
+    Stack,
+    Flex,
+    Absolute,
+    Fixed,
+    Sticky
+}
+
+# ------------------------------------------------------------------------------
+# Alignment
+# ------------------------------------------------------------------------------
+enum WebAlign {
+    Start,
+    Center,
+    End,
+    Between,
+    Around,
+    Evenly,
+    Stretch,
+    Baseline
+}
+
+# ------------------------------------------------------------------------------
+# Color Palette
+# ------------------------------------------------------------------------------
+enum WebColor {
+    Default,
+    Primary,
+    Secondary,
+    Accent,
+    Success,
+    Warning,
+    Danger,
+    Info,
+    Muted,
+    White,
+    Black,
+    Gray50,
+    Gray100,
+    Gray200,
+    Gray500,
+    Gray700,
+    Gray800,
+    Gray900,
+    Transparent,
+    Current
+}
+
+# ------------------------------------------------------------------------------
+# Typography Scales
+# ------------------------------------------------------------------------------
+enum WebTextSize {
+    Xs,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Xl2,
+    Xl3,
+    Xl4,
+    Xl5,
+    Xl6,
+    Display1,
+    Display2
+}
+
+# ------------------------------------------------------------------------------
+# Font Weights
+# ------------------------------------------------------------------------------
+enum WebWeight {
+    Thin,
+    Light,
+    Normal,
+    Medium,
+    SemiBold,
+    Bold,
+    ExtraBold,
+    Black
+}
+
+# ------------------------------------------------------------------------------
+# Border Radius
+# ------------------------------------------------------------------------------
+enum WebRadius {
+    None,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Xl2,
+    Full
+}
+
+# ------------------------------------------------------------------------------
+# Shadows & Elevation
+# ------------------------------------------------------------------------------
+enum WebShadow {
+    None,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Xl2,
+    Inner,
+    Glow
+}
+
+# ------------------------------------------------------------------------------
+# Animations
+# ------------------------------------------------------------------------------
+enum WebAnimation {
+    None,
+    FadeIn,
+    FadeOut,
+    SlideUp,
+    SlideDown,
+    SlideLeft,
+    SlideRight,
+    ScaleUp,
+    ScaleDown,
+    Bounce,
+    Pulse,
+    Spin,
+    Shake,
+    Glow,
+    Float,
+    Shimmer,
+    Flip,
+    StaggerChildren
+}
+
+# ------------------------------------------------------------------------------
+# Animation Easing Curves
+# ------------------------------------------------------------------------------
+enum WebEasing {
+    Linear,
+    Ease,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+    Spring,
+    Bounce
+}
+
+# ------------------------------------------------------------------------------
+# Animation Triggers
+# ------------------------------------------------------------------------------
+enum WebAnimTrigger {
+    Mount,
+    Hover,
+    Focus,
+    Click,
+    Visible,
+    Scroll,
+    StateChange,
+    Exit,
+    Continuous
+}
+
+# ------------------------------------------------------------------------------
+# Event System
+# ------------------------------------------------------------------------------
+enum WebEventKind {
+    None,
+    Click,
+    DblClick,
+    MouseDown,
+    MouseUp,
+    MouseEnter,
+    MouseLeave,
+    MouseMove,
+    KeyDown,
+    KeyUp,
+    Focus,
+    Blur,
+    Input,
+    Change,
+    Submit,
+    Scroll,
+    Resize,
+    Custom
+}
+
+# ------------------------------------------------------------------------------
+# Reactive State Action Kinds
+# ------------------------------------------------------------------------------
+enum WebActionKind {
+    None,
+    IncrementState,
+    DecrementState,
+    ToggleState,
+    SetState,
+    Navigate,
+    SubmitForm,
+    ResetForm,
+    OpenModal,
+    CloseModal,
+    CustomHandler,
+    NoOp
+}
+
+# ------------------------------------------------------------------------------
+# Form Input Kinds
+# ------------------------------------------------------------------------------
+enum WebInputKind {
+    Text,
+    Password,
+    Email,
+    Number,
+    Search,
+    Tel,
+    Url,
+    Date,
+    Time,
+    Color,
+    File,
+    Checkbox,
+    Radio,
+    Range,
+    Hidden,
+    Textarea
+}
+
+# ------------------------------------------------------------------------------
+# Form Validation Rules
+# ------------------------------------------------------------------------------
+enum WebValidation {
+    None,
+    Required,
+    MinLength,
+    MaxLength,
+    Pattern,
+    Email,
+    Min,
+    Max
+}
+
+# ------------------------------------------------------------------------------
+# Form Field State
+# ------------------------------------------------------------------------------
+enum WebFieldState {
+    Pristine,
+    Dirty,
+    Valid,
+    Invalid,
+    Pending,
+    Touched
+}
+
+# ------------------------------------------------------------------------------
+# Data State (Remote / Async State Lifecycle)
+# ------------------------------------------------------------------------------
+enum WebDataState {
+    Idle,
+    Loading,
+    Success,
+    Error,
+    Empty,
+    Stale
+}
+
+# ------------------------------------------------------------------------------
+# Rendering Modes
+# ------------------------------------------------------------------------------
+enum WebRenderMode {
+    Client,
+    Server,
+    Static,
+    Hydrate,
+    Island,
+    Streaming
+}
+
+# ------------------------------------------------------------------------------
+# Responsive Breakpoints
+# ------------------------------------------------------------------------------
+enum WebBreakpoint {
+    Xs,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Xl2
+}
+
+# ------------------------------------------------------------------------------
+# Accessibility Roles (ARIA semantic roles, max 32 variants)
+# ------------------------------------------------------------------------------
+enum WebRole {
+    None,
+    Alert,
+    AlertDialog,
+    Article,
+    Banner,
+    Button,
+    Checkbox,
+    Dialog,
+    Form,
+    Grid,
+    Heading,
+    Img,
+    Link,
+    List,
+    ListItem,
+    Main,
+    Menu,
+    MenuItem,
+    Navigation,
+    Option,
+    ProgressBar,
+    Radio,
+    Region,
+    Search,
+    Status,
+    Tab,
+    TabList,
+    TabPanel,
+    TextBox,
+    Tooltip
+}
+
+# ------------------------------------------------------------------------------
+# Theme Modes
+# ------------------------------------------------------------------------------
+enum WebTheme {
+    Dark,
+    Light,
+    System,
+    HighContrast
+}
+
+# ------------------------------------------------------------------------------
+# HTTP Methods
+# ------------------------------------------------------------------------------
+enum WebMethod {
+    Get,
+    Post,
+    Put,
+    Delete,
+    Patch,
+    Head,
+    Options
+}
+
+# ------------------------------------------------------------------------------
+# State Scope & Lifetime
+# ------------------------------------------------------------------------------
+enum WebStateLifetime {
+    Local,
+    Component,
+    Page,
+    App,
+    Url,
+    Session,
+    Persistent,
+    Remote
+}
+
+# ------------------------------------------------------------------------------
+# Security Policy Level
+# ------------------------------------------------------------------------------
+enum WebSecurity {
+    Strict,
+    Lax,
+    None,
+    Custom
+}

@@ -1,0 +1,53 @@
+# ==============================================================================
+# Webbix Framework — Client Execution & Event Dispatch (webbix/client/client.bix)
+# Pure Rubix implementation of client context, DOM event bridging,
+# event propagation, and interactive dispatch.
+# ==============================================================================
+
+let WEBMIX_EVENT_CLICK  = 1;
+let WEBMIX_EVENT_INPUT  = 2;
+let WEBMIX_EVENT_CHANGE = 3;
+let WEBMIX_EVENT_SUBMIT = 8;
+
+struct WebbixClientContext {
+    client_id: i64,
+    dispatched_count: i64,
+    last_event_node_id: i64,
+    last_event_type: i64,
+    last_event_data: i64
+}
+
+fn webbix_client_init(ctx: *WebbixClientContext, client_id: i64): void {
+    ctx.client_id = client_id;
+    ctx.dispatched_count = 0;
+    ctx.last_event_node_id = 0;
+    ctx.last_event_type = 0;
+    ctx.last_event_data = 0;
+}
+
+fn webbix_client_dispatch_event(
+    ctx: *WebbixClientContext,
+    node_id: i64,
+    event_type: i64,
+    data: i64
+): i64 {
+    ctx.dispatched_count = ctx.dispatched_count + 1;
+    ctx.last_event_node_id = node_id;
+    ctx.last_event_type = event_type;
+    ctx.last_event_data = data;
+    return ctx.dispatched_count;
+}
+
+fn webbix_client_verify_event(
+    ctx: *WebbixClientContext,
+    expected_node_id: i64,
+    expected_type: i64
+): i64 {
+    if ctx.last_event_node_id != expected_node_id {
+        return 0;
+    }
+    if ctx.last_event_type != expected_type {
+        return 0;
+    }
+    return 1;
+}

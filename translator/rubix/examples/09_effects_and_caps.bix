@@ -1,0 +1,53 @@
+# ==============================================================================
+# Rubix Example 09: Algebraic Effects and Capability Security
+# File: examples/09_effects_and_caps.bix
+#
+# Demonstrates:
+#   - Declaring pure functions: guaranteed zero side-effects.
+#   - Declaring effectful functions: effect(io, syscall).
+#   - Capability tokens: with(CapFs, CapNet).
+# ==============================================================================
+
+# Pure function: compiler statically verifies zero I/O, zero mutation
+fn compute_primes_count(limit: i64): i64 effect(pure) {
+    let count = 0;
+    let n = 2;
+    while n <= limit {
+        let is_p = 1;
+        let d = 2;
+        while (d * d) <= n {
+            if (n % d) == 0 {
+                is_p = 0;
+                break;
+            }
+            d = d + 1;
+        }
+        if is_p == 1 {
+            count = count + 1;
+        }
+        n = n + 1;
+    }
+    return count;
+}
+
+# Capability-governed logging function
+fn log_system_event(msg: str) with(CapFs) effect(io) {
+    println("[SECURE LOG]:");
+    println(msg);
+    return 0;
+}
+
+fn main(): i64 effect(io, syscall) with(CapFs) {
+    println("--- Rubix Example 09: Effects & Capabilities ---");
+
+    # 1. Evaluate pure computation
+    let total_primes = compute_primes_count(100);
+
+    # 2. Communicate through capability-governed boundary
+    log_system_event("Primes count calculated under limit 100:");
+    print_int(total_primes);
+    println("");
+
+    println("--- Example 09 Complete ---");
+    return 0;
+}

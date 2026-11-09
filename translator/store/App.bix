@@ -1,0 +1,28 @@
+# ==============================================================================
+# Application Root & Route Dispatcher (App.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+include "state/store.bix";
+include "routes/home.bix";
+include "routes/projects.bix";
+include "routes/store.bix";
+
+fn app_create(): *App {
+    let app = App("store — Built with Webbix");
+    Theme(app, WebTheme.Light as i64);
+    app_init_store(app, 1250, 420);
+    route_home_build(app);
+    route_projects_build(app);
+    route_store_build(app);
+    return app;
+}
+
+let APP_PORT = 8080;
+
+fn main(): i64 {
+    let app = app_create();
+    let res = Build(app);
+    if res != 42 { return 1; }
+    return Serve(app, APP_PORT);
+}

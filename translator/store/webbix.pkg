@@ -1,0 +1,9 @@
+package {
+    name: "store"
+    version: "1.0.0"
+    framework: "webbix"
+    entry: "App.bix"
+    target: "native"
+    port: 8080
+    description: "High-performance native web application built with Webbix & Rubix."
+}

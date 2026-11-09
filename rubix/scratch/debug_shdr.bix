@@ -1,0 +1,43 @@
+fn main(): i64 {
+    let p = sys_mmap(0, 64, 3, 34, -1, 0);
+    set_byte(p, 0, 97); set_byte(p, 1, 99); set_byte(p, 2, 99); # "account_v2.bin"
+    set_byte(p, 3, 111); set_byte(p, 4, 117); set_byte(p, 5, 110);
+    set_byte(p, 6, 116); set_byte(p, 7, 95); set_byte(p, 8, 118);
+    set_byte(p, 9, 50); set_byte(p, 10, 46); set_byte(p, 11, 98);
+    set_byte(p, 12, 105); set_byte(p, 13, 110); set_byte(p, 14, 0);
+
+    let fd = sys_open(p, 0, 0);
+    let buf = sys_mmap(0, 65536, 3, 34, -1, 0);
+    let n = sys_read(fd, buf, 65536);
+    sys_close(fd);
+
+    let e_shoff = get_qword(buf, 5);
+    let e_shnum = get_byte(buf, 60);
+    let e_shstrndx = get_byte(buf, 62);
+    println("e_shoff:"); print(e_shoff); println("");
+    println("e_shnum:"); print(e_shnum); println("");
+    println("e_shstrndx:"); print(e_shstrndx); println("");
+
+    let shstr_hdr = buf + e_shoff + (e_shstrndx * 64);
+    let shstr_off = get_qword(shstr_hdr, 3);
+    println("shstr_off:"); print(shstr_off); println("");
+    let shstr_ptr = buf + shstr_off;
+
+    let si = 0;
+    while si < e_shnum {
+        let shdr = buf + e_shoff + (si * 64);
+        let name_idx = get_byte(shdr, 0) + (get_byte(shdr, 1) * 256);
+        let name_ptr = shstr_ptr + name_idx;
+        println("si:"); print(si);
+        println(" name_idx:"); print(name_idx);
+        println(" b0:"); print(get_byte(name_ptr, 0));
+        println(" b1:"); print(get_byte(name_ptr, 1));
+        println(" b2:"); print(get_byte(name_ptr, 2));
+        println(" b3:"); print(get_byte(name_ptr, 3));
+        println(" b4:"); print(get_byte(name_ptr, 4));
+        println(" b5:"); print(get_byte(name_ptr, 5));
+        println("");
+        si = si + 1;
+    }
+    return 0;
+}

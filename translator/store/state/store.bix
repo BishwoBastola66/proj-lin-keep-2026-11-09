@@ -1,0 +1,29 @@
+# ==============================================================================
+# Reactive State Store (state/store.bix)
+# Named reactive state store for the Webbix Store website.
+# ==============================================================================
+
+include "webbix/webbix.bix";
+
+fn app_init_store(app: *App, initial_views: i64, initial_stars: i64): void {
+    State(app, "views", initial_views);
+    State(app, "stars", initial_stars);
+    State(app, "cart_count", 0);
+    State(app, "cart_total", 0);
+    State(app, "tab", 1);
+}
+
+fn store_add_to_cart(app: *App, price: i64): void {
+    let cur_count = StateGet(app, "cart_count");
+    let cur_total = StateGet(app, "cart_total");
+    StateSet(app, "cart_count", cur_count + 1);
+    StateSet(app, "cart_total", cur_total + price);
+}
+
+fn store_get_cart_count(app: *App): i64 {
+    return StateGet(app, "cart_count");
+}
+
+fn store_get_cart_total(app: *App): i64 {
+    return StateGet(app, "cart_total");
+}

@@ -1,0 +1,16 @@
+# ==============================================================================
+# Projects Page Route (routes/projects.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+include "../components/navbar.bix";
+include "../components/cards.bix";
+include "../components/footer.bix";
+
+fn route_projects_build(app: *App): void {
+    Page(app, "/projects", "Projects");
+        comp_navbar(app, "My Portfolio");
+        comp_project_grid(app);
+        comp_footer(app, "Built natively with Webbix & Rubix.");
+    End(app);
+}

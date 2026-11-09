@@ -1,0 +1,28 @@
+# test_schema_v1.bix - Schema V1 Client compiled against Account (id, balance)
+struct Account {
+    id: i64,
+    balance: i64
+}
+
+fn main(): i64 {
+    # Allocate account data buffer
+    let p = sys_mmap(0, 4096, 3, 34, -1, 0);
+
+    # Simulate runtime data mutated to Schema V2 layout:
+    #   offset 0:  id (101)
+    #   offset 8:  flags (7)         <-- INSERTED IN V2
+    #   offset 16: created_at (9999)  <-- INSERTED IN V2
+    #   offset 24: balance (42)       <-- DISPLACEMENT IN V2
+    set_qword(p, 0, 101);
+    set_qword(p, 1, 7);
+    set_qword(p, 2, 9999);
+    set_qword(p, 3, 42);
+
+    let acc = p as *Account;
+    let b = acc.balance;
+
+    if b == 42 {
+        return 0; # Success: healed against V2 layout!
+    }
+    return 1;     # Unhealed: reads offset 8 (value 7)
+}

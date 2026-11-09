@@ -1,0 +1,161 @@
+use std.string;
+use std.net;
+
+# ==============================================================================
+# Rubix Standard Library: HTTP Protocol, Client & Server Helpers (std/http.bix)
+# Pure native HTTP request/response models, parser, router, and client.
+# ==============================================================================
+
+struct HttpRequest {
+    method: str,
+    path: str,
+    host: str,
+    body: str
+}
+
+struct HttpResponse {
+    status_code: i64,
+    status_text: str,
+    body: str
+}
+
+fn http_status_text(code: i64): str {
+    if code == 200 { return "200 OK"; }
+    if code == 201 { return "201 Created"; }
+    if code == 204 { return "204 No Content"; }
+    if code == 301 { return "301 Moved Permanently"; }
+    if code == 302 { return "302 Found"; }
+    if code == 400 { return "400 Bad Request"; }
+    if code == 401 { return "401 Unauthorized"; }
+    if code == 403 { return "403 Forbidden"; }
+    if code == 404 { return "404 Not Found"; }
+    if code == 429 { return "429 Too Many Requests"; }
+    if code == 500 { return "500 Internal Server Error"; }
+    return "" + code + " Response";
+}
+
+fn http_response_text(status_code: i64, body: str): str {
+    let len = string_length(body);
+    return "HTTP/1.1 " + http_status_text(status_code) + "\r\n" +
+           "Content-Type: text/plain; charset=utf-8\r\n" +
+           "Content-Length: " + len + "\r\n" +
+           "Connection: close\r\n\r\n" +
+           body;
+}
+
+fn http_response_json(status_code: i64, json_body: str): str {
+    let len = string_length(json_body);
+    return "HTTP/1.1 " + http_status_text(status_code) + "\r\n" +
+           "Content-Type: application/json; charset=utf-8\r\n" +
+           "Content-Length: " + len + "\r\n" +
+           "Connection: close\r\n\r\n" +
+           json_body;
+}
+
+fn http_parse_method(raw_request: str): str {
+    if string_starts_with(raw_request, "GET") { return "GET"; }
+    if string_starts_with(raw_request, "POST") { return "POST"; }
+    if string_starts_with(raw_request, "PUT") { return "PUT"; }
+    if string_starts_with(raw_request, "DELETE") { return "DELETE"; }
+    if string_starts_with(raw_request, "HEAD") { return "HEAD"; }
+    if string_starts_with(raw_request, "OPTIONS") { return "OPTIONS"; }
+    return "UNKNOWN";
+}
+
+fn http_parse_path(raw_request: str): str {
+    let l = string_length(raw_request);
+    let s1 = string_index_of(raw_request, " ");
+    if s1 < 0 { return "/"; }
+    let start = s1 + 1;
+    let s2 = -1;
+    let i = start;
+    while i < l {
+        if (raw_request[i] as i64) == 32 { # ' '
+            s2 = i;
+            i = l;
+        }
+        i = i + 1;
+    }
+    if s2 < 0 { return "/"; }
+    return string_slice(raw_request, start, s2 - start);
+}
+
+fn http_route_match(request_path: str, route_path: str): bool {
+    return request_path == route_path;
+}
+
+fn http_response_new(status_code: i64, status_text: str, body: str): *HttpResponse {
+    let r = alloc_buffer(24) as *HttpResponse;
+    r.status_code = status_code;
+    r.status_text = status_text;
+    r.body = body;
+    return r;
+}
+
+# --- HTTP Client ---
+
+fn http_get(host: str, port: i64, path: str): *HttpResponse {
+    let fd = net_tcp_connect(host, port);
+    if fd < 0 {
+        return http_response_new(502, "Bad Gateway", "");
+    }
+
+    let req = "GET " + path + " HTTP/1.1\r\n" +
+              "Host: " + host + "\r\n" +
+              "User-Agent: Rubix/1.0\r\n" +
+              "Connection: close\r\n\r\n";
+    net_tcp_send(fd, req);
+
+    let resp_raw = net_tcp_recv(fd, 65536);
+    net_tcp_close(fd);
+
+    let body_idx = string_index_of(resp_raw, "\r\n\r\n");
+    let body = "";
+    if body_idx >= 0 {
+        body = string_slice(resp_raw, body_idx + 4, string_length(resp_raw) - (body_idx + 4));
+    } else {
+        body = resp_raw;
+    }
+
+    let code = 200;
+    if string_contains(resp_raw, " 404 ") { code = 404; }
+    if string_contains(resp_raw, " 500 ") { code = 500; }
+
+    return http_response_new(code, http_status_text(code), body);
+}
+
+fn http_post(host: str, port: i64, path: str, body: str, content_type: str): *HttpResponse {
+    let fd = net_tcp_connect(host, port);
+    if fd < 0 {
+        return http_response_new(502, "Bad Gateway", "");
+    }
+
+    let len = string_length(body);
+    let req = "POST " + path + " HTTP/1.1\r\n" +
+              "Host: " + host + "\r\n" +
+              "User-Agent: Rubix/1.0\r\n" +
+              "Content-Type: " + content_type + "\r\n" +
+              "Content-Length: " + len + "\r\n" +
+              "Connection: close\r\n\r\n" +
+              body;
+    net_tcp_send(fd, req);
+
+    let resp_raw = net_tcp_recv(fd, 65536);
+    net_tcp_close(fd);
+
+    let body_idx = string_index_of(resp_raw, "\r\n\r\n");
+    let resp_body = "";
+    if body_idx >= 0 {
+        resp_body = string_slice(resp_raw, body_idx + 4, string_length(resp_raw) - (body_idx + 4));
+    } else {
+        resp_body = resp_raw;
+    }
+
+    let code = 200;
+    if string_contains(resp_raw, " 201 ") { code = 201; }
+    if string_contains(resp_raw, " 400 ") { code = 400; }
+    if string_contains(resp_raw, " 404 ") { code = 404; }
+    if string_contains(resp_raw, " 500 ") { code = 500; }
+
+    return http_response_new(code, http_status_text(code), resp_body);
+}

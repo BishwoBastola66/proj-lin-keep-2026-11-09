@@ -1,0 +1,16 @@
+node_modules/
+.next/
+build/
+dist/
+venv/
+.venv/
+*.apk
+*.aab
+*.so
+*.sst
+*.litertlm
+*.tar.gz
+*.zip
+*.mp4
+__pycache__/
+.dart_tool/

@@ -1,0 +1,14 @@
+/home/bishwaxyz/justforpractice/practice2/bin/Debug/net10.0/practice2
+/home/bishwaxyz/justforpractice/practice2/bin/Debug/net10.0/practice2.deps.json
+/home/bishwaxyz/justforpractice/practice2/bin/Debug/net10.0/practice2.runtimeconfig.json
+/home/bishwaxyz/justforpractice/practice2/bin/Debug/net10.0/practice2.dll
+/home/bishwaxyz/justforpractice/practice2/bin/Debug/net10.0/practice2.pdb
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/practice2.GeneratedMSBuildEditorConfig.editorconfig
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/practice2.AssemblyInfoInputs.cache
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/practice2.AssemblyInfo.cs
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/practice2.csproj.CoreCompileInputs.cache
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/practice2.dll
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/refint/practice2.dll
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/practice2.pdb
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/practice2.genruntimeconfig.cache
+/home/bishwaxyz/justforpractice/practice2/obj/Debug/net10.0/ref/practice2.dll

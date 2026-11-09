@@ -1,0 +1,33 @@
+# ==============================================================================
+# Rix — Dependency Graph Resolver (src/resolver.bix)
+# ==============================================================================
+
+# Check if a version satisfies a semver requirement
+# Returns: 1 if satisfied, 0 if not
+fn resolve_version_match(actual_ver: String, req_ver: String): Integer {
+    if req_ver == "*" {
+        return 1
+    }
+    if actual_ver == req_ver {
+        return 1
+    }
+    
+    # Check caret compatibility (e.g. ^v1.0.0 matches v1.x.x)
+    if string_length(req_ver) > 2 {
+        if byte_at(req_ver, 0) == 94 { # '^'
+            # Skip '^' and match first version segment
+            let req_prefix = substring(req_ver, 1, 3)
+            let act_prefix = substring(actual_ver, 0, 2)
+            if req_prefix == act_prefix {
+                return 1
+            }
+        }
+    }
+    
+    0
+}
+
+# Format resolved package lock entry
+fn resolve_format_package_entry(name: String, version: String, source: String): String {
+    name + " = { version = \"" + version + "\", source = \"" + source + "\" }\n"
+}

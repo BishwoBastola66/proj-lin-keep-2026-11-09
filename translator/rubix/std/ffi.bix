@@ -1,0 +1,295 @@
+# ==============================================================================
+# Rubix Standard Library - Sovereign Foreign Function Interface (std/ffi.bix)
+# ==============================================================================
+# Sovereign native ELF shared object (.so) loader and C ABI invocation engine.
+# Directly parses ELF64 headers, .dynsym, and .dynstr tables without external libc.
+# Zero external tools, zero dependencies.
+# ==============================================================================
+
+struct CDynamicLib {
+    path: str,
+    handle_ptr: i64,
+    size: i64,
+    dynsym_off: i64,
+    dynsym_sz: i64,
+    dynstr_off: i64,
+    is_open: bool
+}
+
+struct CPointer {
+    address: i64,
+    is_null: bool
+}
+
+fn ffi_is_supported(): bool {
+    return true;
+}
+
+fn ffi_streq(s1: i64, s2: i64): i64 {
+    let p = 0;
+    while true {
+        let b1 = get_byte(s1, p);
+        let b2 = get_byte(s2, p);
+        if b1 != b2 { return 0; }
+        if b1 == 0 { return 1; }
+        p = p + 1;
+    }
+    return 1;
+}
+
+fn ffi_streq_name(sym_ptr: i64, name: str): i64 {
+    let n_len = string_length(name);
+    let i = 0;
+    while i < n_len {
+        let b = get_byte(sym_ptr, i);
+        if b != (name[i] as i64) { return 0; }
+        i = i + 1;
+    }
+    if get_byte(sym_ptr, n_len) != 0 { return 0; }
+    return 1;
+}
+
+# Opens an ELF shared library (.so), mapping its pages into memory and indexing symbols.
+fn ffi_open_lib(path: str): *CDynamicLib {
+    let lib = alloc_buffer(56) as *CDynamicLib;
+    lib.path = path;
+    lib.handle_ptr = 0;
+    lib.size = 0;
+    lib.dynsym_off = 0;
+    lib.dynsym_sz = 0;
+    lib.dynstr_off = 0;
+    lib.is_open = false;
+
+    let p_len = string_length(path);
+    let p_buf = sys_mmap_page();
+    let pi = 0;
+    while pi < p_len {
+        set_byte(p_buf, pi, path[pi] as i64);
+        pi = pi + 1;
+    }
+    set_byte(p_buf, p_len, 0);
+    let fd = sys_open(p_buf, 0, 0); # O_RDONLY
+    sys_munmap(p_buf, 4096);
+    if fd < 0 { return lib; }
+
+    # Map memory buffer for the shared object
+    let map_sz = 4194304;
+    # PROT_READ(1) | PROT_WRITE(2) | PROT_EXEC(4) = 7, MAP_PRIVATE(2) | MAP_ANONYMOUS(32) = 34
+    let base = sys_mmap(0, map_sz, 7, 34, -1, 0);
+    if base <= 0 {
+        sys_close(fd);
+        return lib;
+    }
+
+    let bytes_read = sys_read_all(fd, base, map_sz);
+    sys_close(fd);
+    if bytes_read < 64 {
+        sys_munmap(base, map_sz);
+        return lib;
+    }
+
+    # Verify ELF64 Magic: 0x7F, 'E', 'L', 'F'
+    if (get_byte(base, 0) != 127) | (get_byte(base, 1) != 69) | (get_byte(base, 2) != 76) | (get_byte(base, 3) != 70) {
+        sys_munmap(base, map_sz);
+        return lib;
+    }
+
+    # Parse section headers to locate .dynsym and .dynstr
+    let shoff = get_qword(base, 40);
+    let shent_sz = get_word(base, 58);
+    let shnum = get_word(base, 60);
+
+    let dynsym_off = 0;
+    let dynsym_sz = 0;
+    let dynstr_off = 0;
+
+    let i = 0;
+    while i < shnum {
+        let sh_addr = base + shoff + (i * shent_sz);
+        let sh_type = get_dword(sh_addr, 4); # SHT_DYNSYM = 11, SHT_STRTAB = 3
+        let sh_offset = get_qword(sh_addr, 24);
+        let sh_size = get_qword(sh_addr, 32);
+
+        if sh_type == 11 { # SHT_DYNSYM
+            dynsym_off = sh_offset;
+            dynsym_sz = sh_size;
+        }
+        if sh_type == 3 { # SHT_STRTAB
+            if dynstr_off == 0 {
+                dynstr_off = sh_offset;
+            }
+        }
+        i = i + 1;
+    }
+
+    lib.handle_ptr = base;
+    lib.size = bytes_read;
+    lib.dynsym_off = dynsym_off;
+    lib.dynsym_sz = dynsym_sz;
+    lib.dynstr_off = dynstr_off;
+    lib.is_open = true;
+    return lib;
+}
+
+# Looks up an exported symbol name in the loaded ELF library.
+fn ffi_get_symbol(lib: *CDynamicLib, name: str): *CPointer {
+    let p = alloc_buffer(16) as *CPointer;
+    p.address = 0;
+    p.is_null = true;
+
+    if lib.is_open == false { return p; }
+    if lib.handle_ptr == 0 { return p; }
+    if lib.dynsym_off == 0 { return p; }
+    if lib.dynstr_off == 0 { return p; }
+
+    let base = lib.handle_ptr;
+    let sym_table = base + lib.dynsym_off;
+    let str_table = base + lib.dynstr_off;
+    let sym_count = lib.dynsym_sz / 24; # 24 bytes per Elf64_Sym
+
+    let i = 0;
+    while i < sym_count {
+        let sym_addr = sym_table + (i * 24);
+        let st_name = get_dword(sym_addr, 0); # offset into dynstr
+        let st_value = get_qword(sym_addr, 8); # address offset
+
+        if st_name > 0 {
+            let sym_name_ptr = str_table + st_name;
+            if ffi_streq_name(sym_name_ptr, name) == 1 {
+                p.address = base + st_value;
+                p.is_null = false;
+                return p;
+            }
+        }
+        i = i + 1;
+    }
+
+    return p;
+}
+
+fn ffi_close_lib(lib: *CDynamicLib): i64 {
+    if lib.is_open == true {
+        if lib.handle_ptr != 0 {
+            sys_munmap(lib.handle_ptr, 4194304);
+            lib.handle_ptr = 0;
+        }
+        lib.is_open = false;
+    }
+    return 0;
+}
+
+# Executes a foreign C function passing up to 2 integer/pointer arguments.
+fn ffi_call_c_func(c_ptr: *CPointer, arg1: i64, arg2: i64): i64 {
+    if c_ptr.is_null == true { return 0; }
+    if c_ptr.address == 0 { return 0; }
+    let fn_target = c_ptr.address;
+    return fn_target(arg1, arg2);
+}
+
+# Executes a foreign C function passing up to 4 integer/pointer arguments.
+fn ffi_call_c_func4(c_ptr: *CPointer, arg1: i64, arg2: i64, arg3: i64, arg4: i64): i64 {
+    if c_ptr.is_null == true { return 0; }
+    if c_ptr.address == 0 { return 0; }
+    let fn_target = c_ptr.address;
+    return fn_target(arg1, arg2, arg3, arg4);
+}
+
+# Synthesizes an executable machine trampoline for calling a Microsoft x64 function from System V AMD64 host.
+# Permutes arguments (RDI -> RCX, RSI -> RDX) and allocates 32-byte shadow space.
+fn ffi_create_win64_adapter(target_fn_ptr: i64, arity: i64): i64 {
+    if target_fn_ptr == 0 { return 0; }
+    # Map a 4KB executable page: PROT_READ(1) | PROT_WRITE(2) | PROT_EXEC(4) = 7, MAP_PRIVATE(2) | MAP_ANONYMOUS(32) = 34
+    let page = sys_mmap(0, 4096, 7, 34, -1, 0);
+    if page <= 0 { return target_fn_ptr; }
+
+    let l = 0;
+    # push rbp (55)
+    set_byte(page, l, 85); l = l + 1;
+    # mov rbp, rsp (48 89 e5)
+    set_byte(page, l, 72); l = l + 1;
+    set_byte(page, l, 137); l = l + 1;
+    set_byte(page, l, 229); l = l + 1;
+
+    # sub rsp, 32 (48 83 ec 20) - 32-byte mandatory shadow space
+    set_byte(page, l, 72); l = l + 1;
+    set_byte(page, l, 131); l = l + 1;
+    set_byte(page, l, 236); l = l + 1;
+    set_byte(page, l, 32); l = l + 1;
+
+    # Shuffling:
+    if arity >= 2 {
+        # mov rdx, rsi (48 89 f2)
+        set_byte(page, l, 72); l = l + 1;
+        set_byte(page, l, 137); l = l + 1;
+        set_byte(page, l, 242); l = l + 1;
+    }
+    if arity >= 1 {
+        # mov rcx, rdi (48 89 f9)
+        set_byte(page, l, 72); l = l + 1;
+        set_byte(page, l, 137); l = l + 1;
+        set_byte(page, l, 249); l = l + 1;
+    }
+
+    # mov rax, target_fn_ptr (48 b8 <imm64>)
+    set_byte(page, l, 72); l = l + 1;
+    set_byte(page, l, 184); l = l + 1;
+    let bi = 0;
+    let p = target_fn_ptr;
+    while bi < 8 {
+        set_byte(page, l, p & 255);
+        l = l + 1;
+        p = p >> 8;
+        bi = bi + 1;
+    }
+
+    # call rax (ff d0)
+    set_byte(page, l, 255); l = l + 1;
+    set_byte(page, l, 208); l = l + 1;
+
+    # add rsp, 32 (48 83 c4 20)
+    set_byte(page, l, 72); l = l + 1;
+    set_byte(page, l, 131); l = l + 1;
+    set_byte(page, l, 196); l = l + 1;
+    set_byte(page, l, 32); l = l + 1;
+
+    # pop rbp (5d)
+    set_byte(page, l, 93); l = l + 1;
+    # ret (c3)
+    set_byte(page, l, 195); l = l + 1;
+
+    return page;
+}
+
+# Invokes a foreign function adhering to Microsoft x64 calling convention with specialized adapter
+fn ffi_call_win64(c_ptr: *CPointer, arg1: i64, arg2: i64): i64 {
+    if c_ptr.is_null == true { return 0; }
+    if c_ptr.address == 0 { return 0; }
+    let adapter = ffi_create_win64_adapter(c_ptr.address, 2);
+    let res = adapter(arg1, arg2);
+    sys_munmap(adapter, 4096);
+    return res;
+}
+
+# ABI-aware invocation: Applies Zero-Cost Elimination for compatible conventions,
+# and synthesizes specialized adapters when caller and callee ABIs diverge.
+fn ffi_call_with_abi(c_ptr: *CPointer, caller_abi: i64, callee_abi: i64, arg1: i64, arg2: i64): i64 {
+    if c_ptr.is_null == true { return 0; }
+    if c_ptr.address == 0 { return 0; }
+
+    # Zero-Cost Path: Identical ABI -> Direct Native Call (0 cycles overhead)
+    if caller_abi == callee_abi {
+        let fn_target = c_ptr.address;
+        return fn_target(arg1, arg2);
+    }
+
+    # Adapter Path: System V host calling Microsoft x64 target
+    if (caller_abi == 1) & (callee_abi == 2) {
+        return ffi_call_win64(c_ptr, arg1, arg2);
+    }
+
+    # Default fallback: Direct call
+    let def_fn = c_ptr.address;
+    return def_fn(arg1, arg2);
+}
+
+

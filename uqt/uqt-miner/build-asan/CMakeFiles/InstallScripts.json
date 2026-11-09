@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/bishwaxyz/uqt/uqt-miner/build-asan/cmake_install.cmake",
+		"/home/bishwaxyz/uqt/uqt-miner/build-asan/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,0 +1,10 @@
+include "ir/types.bix";
+include "ir/style.bix";
+include "ir/event.bix";
+include "ir/node.bix";
+include "ir/app.bix";
+include "ir/builder.bix";
+include "components/ui.bix";
+include "declarative/ui.bix";
+include "rex/rex_bridge.bix";
+include "declarative/app.bix";

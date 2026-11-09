@@ -1,0 +1,132 @@
+# ==============================================================================
+# Rubix Standard Library - Threading, Mutexes & Atomics (std/thread.bix)
+# ==============================================================================
+# ARCHITECTURAL AUDIT NOTICE & LIMITATIONS:
+# 1. This module is an educational and sequential reference model.
+# 2. Rubix does not currently expose native OS kernel threading (clone/pthread),
+#    hardware memory barriers, or hardware atomic read-modify-write instructions
+#    (e.g., LOCK XADD, LOCK CMPXCHG) in its native machine-code emitter.
+# 3. DO NOT use this module for true multithreaded concurrency. Functions such
+#    as atomic_fetch_add and mutex_lock are sequential model implementations and
+#    will suffer data races and lost updates under true parallel hardware execution.
+# ==============================================================================
+
+struct Thread {
+    id: i64,
+    is_running: bool
+}
+
+struct Mutex {
+    state: i64
+}
+
+struct AtomicInt {
+    value: i64
+}
+
+struct Channel {
+    head: i64,
+    tail: i64,
+    capacity: i64,
+    count: i64
+}
+
+# Returns false indicating native hardware multithreading is currently not supported.
+# fn thread_is_hardware_supported(): Boolean
+fn thread_is_hardware_supported(): bool {
+    return false;
+}
+
+# Creates a sequential model Thread representation.
+# NOTE: Does NOT spawn an OS-level kernel thread.
+fn spawn_thread(id: i64): *Thread {
+    let t = alloc_buffer(16) as *Thread;
+    t.id = id;
+    t.is_running = true;
+    return t;
+}
+
+# Joins a sequential model Thread.
+fn join_thread(t: *Thread): i64 {
+    t.is_running = false;
+    return 0;
+}
+
+# Creates a sequential Mutex.
+fn mutex_create(): *Mutex {
+    let m = alloc_buffer(8) as *Mutex;
+    m.state = 0;
+    return m;
+}
+
+# Model spin-lock acquisition.
+# LIMITATION: Performs a plain load and store without hardware LOCK CMPXCHG or OS yielding.
+# Unsafe under true hardware concurrency.
+fn mutex_lock(m: *Mutex): void {
+    let mut_acquired = false;
+    while mut_acquired == false {
+        if m.state == 0 {
+            m.state = 1;
+            mut_acquired = true;
+        }
+    }
+}
+
+# Unlocks the model Mutex.
+fn mutex_unlock(m: *Mutex): void {
+    m.state = 0;
+}
+
+# Creates a sequential AtomicInt container.
+fn atomic_create(initial: i64): *AtomicInt {
+    let a = alloc_buffer(8) as *AtomicInt;
+    a.value = initial;
+    return a;
+}
+
+# Sequential atomic read.
+fn atomic_get(a: *AtomicInt): i64 {
+    return a.value;
+}
+
+# Sequential atomic write.
+fn atomic_set(a: *AtomicInt, val: i64): void {
+    a.value = val;
+}
+
+# Sequential fetch-and-add simulation.
+# LIMITATION: Implemented as plain load, addition, and store.
+# Lacks hardware atomic RMW guarantees (LOCK XADD); susceptible to lost updates under concurrency.
+fn atomic_fetch_add(a: *AtomicInt, delta: i64): i64 {
+    let old = a.value;
+    a.value = a.value + delta;
+    return old;
+}
+
+# Creates a bounded channel.
+fn channel_create(capacity: i64): *Channel {
+    let ch = alloc_buffer(32) as *Channel;
+    ch.head = 0;
+    ch.tail = 0;
+    ch.capacity = capacity;
+    ch.count = 0;
+    return ch;
+}
+
+# Sequential channel send.
+fn channel_send(ch: *Channel, val: i64): bool {
+    if ch.count < ch.capacity {
+        ch.count = ch.count + 1;
+        return true;
+    }
+    return false;
+}
+
+# Sequential channel receive.
+fn channel_recv(ch: *Channel): ?i64 {
+    if ch.count > 0 {
+        ch.count = ch.count - 1;
+        return Some(1);
+    }
+    return None;
+}

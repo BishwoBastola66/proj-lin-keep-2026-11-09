@@ -1,0 +1,44 @@
+# ==============================================================================
+# Webbix Web IR — Native Event Model (webbix/ir/event.bix)
+# Pure typed Rubix event and action representation.
+# Full event model with propagation, modifiers, and handler chains.
+# ==============================================================================
+
+include "types.bix";
+
+# ------------------------------------------------------------------------------
+# Event Descriptor
+# ------------------------------------------------------------------------------
+struct WebEvent {
+    event_kind: i64,
+    action_kind: i64,
+    target_state_key: i64,
+    payload_val: i64,
+    custom_handler_id: i64,
+    prevent_default: i64,
+    stop_propagation: i64,
+    debounce_ms: i64,
+    throttle_ms: i64,
+    is_passive: i64,
+    modifier_ctrl: i64,
+    modifier_shift: i64,
+    modifier_alt: i64,
+    key_code: i64
+}
+
+fn web_event_default(e: *WebEvent): void {
+    e.event_kind = WebEventKind.None;
+    e.action_kind = WebActionKind.None;
+    e.target_state_key = 0;
+    e.payload_val = 0;
+    e.custom_handler_id = 0;
+    e.prevent_default = 0;
+    e.stop_propagation = 0;
+    e.debounce_ms = 0;
+    e.throttle_ms = 0;
+    e.is_passive = 0;
+    e.modifier_ctrl = 0;
+    e.modifier_shift = 0;
+    e.modifier_alt = 0;
+    e.key_code = 0;
+}

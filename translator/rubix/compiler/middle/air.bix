@@ -1,0 +1,73 @@
+# ==============================================================================
+# Rubix — Affine & Resource Intermediate Representation (AIR)
+# File: compiler/middle/air.bix
+#
+# Intermediate representation explicitly modeling:
+#   - Resource Ownership Transfers (Move)
+#   - Scoped Borrow References
+#   - Lexical Region Allocation & Tear-down
+#   - Stack Promotion (from Escape Analysis)
+#   - Deterministic Resource Finalization (Drop)
+# ==============================================================================
+
+let AIR_OP_CONST          = 1;
+let AIR_OP_MOVE           = 2;
+let AIR_OP_BORROW         = 3;
+let AIR_OP_DROP           = 4;
+let AIR_OP_REGION_ENTER   = 5;
+let AIR_OP_REGION_LEAVE   = 6;
+let AIR_OP_CALL           = 7;
+let AIR_OP_EFFECT_BARRIER = 8;
+let AIR_OP_STACK_PROMOTE  = 9;
+let AIR_OP_ADD            = 10;
+let AIR_OP_SUB            = 11;
+let AIR_OP_MUL            = 12;
+let AIR_OP_RETURN         = 15;
+
+fn air_init(buf: i64, cap: i64): i64 {
+    set_qword(buf, 0, 0);          # inst_count = 0
+    set_qword(buf, 1, cap);        # capacity
+    set_qword(buf, 2, 1095784786); # AIR Magic: 'AIR1'
+    return 0;
+}
+
+fn air_emit(buf: i64, op: i64, dst: i64, s1: i64, s2: i64, res_id: i64, flags: i64): i64 {
+    let count = get_qword(buf, 0);
+    let cap = get_qword(buf, 1);
+    if (count < 0) | (count >= cap) { return -1; }
+
+    let addr = buf + 64 + (count * 48);
+    set_qword(addr, 0, op);
+    set_qword(addr, 1, dst);
+    set_qword(addr, 2, s1);
+    set_qword(addr, 3, s2);
+    set_qword(addr, 4, res_id);
+    set_qword(addr, 5, flags);
+
+    set_qword(buf, 0, count + 1);
+    return count;
+}
+
+fn air_get_count(buf: i64): i64 {
+    return get_qword(buf, 0);
+}
+
+fn air_get_op(buf: i64, idx: i64): i64 {
+    return get_qword(buf + 64 + (idx * 48), 0);
+}
+
+fn air_get_dst(buf: i64, idx: i64): i64 {
+    return get_qword(buf + 64 + (idx * 48), 1);
+}
+
+fn air_get_src1(buf: i64, idx: i64): i64 {
+    return get_qword(buf + 64 + (idx * 48), 2);
+}
+
+fn air_get_src2(buf: i64, idx: i64): i64 {
+    return get_qword(buf + 64 + (idx * 48), 3);
+}
+
+fn air_get_res_id(buf: i64, idx: i64): i64 {
+    return get_qword(buf + 64 + (idx * 48), 4);
+}

@@ -1,0 +1,24 @@
+# ==============================================================================
+# Rubix Library Search Page (/packages)
+# File: library/app/src/pages/search.bix
+# ==============================================================================
+
+include "rubix/webbix/webbix.bix";
+include "../components/theme.bix";
+include "../components/header.bix";
+include "../components/footer.bix";
+include "../components/package_card.bix";
+
+fn route_search_build(app: *App): void {
+    Page(app, "/packages", "Packages — Rubix Library");
+        comp_header(app);
+
+        Section(app, "All Registered Packages", "Content-addressed packages with Ed25519 provenance");
+            comp_package_card(app, "collections", "1.0.0", "High-performance persistent collections & HashMaps", "data");
+            comp_package_card(app, "webbix-core", "1.0.0", "Reactive declarative web engine & DOM bindings", "web");
+            comp_package_card(app, "tensor-ai", "0.5.0", "INT8 quantized matrix multiplication kernels", "ai");
+            comp_package_card(app, "wire-proto", "1.0.0", "Binary wire serialization and RPC protocol", "networking");
+
+        comp_footer(app);
+    End(app);
+}

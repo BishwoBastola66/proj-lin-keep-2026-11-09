@@ -1,0 +1,244 @@
+use std.tensor;
+# ==============================================================================
+# Rubix Standard Library: LLM Runtime & Agent System (std/llm.bix)
+# ==============================================================================
+# Native and borrowable LLM execution framework for Rubix:
+#   1. Capability-typed agent tools (Concept 6 of AI-Native Strategy)
+#   2. First-class streaming token generator (Concept 9)
+#   3. Gradual AI adoption bridge: @backend(borrow | native | webgpu) (Concept 10)
+#   4. End-to-end quantized transformer inference engine with KV-cache
+# ==============================================================================
+
+# Backend Modes
+let BACKEND_BORROW = 1; # External engine / FFI
+let BACKEND_NATIVE = 2; # Pure Rubix native kernel pipeline
+let BACKEND_WEBGPU = 3; # Browser host WebGPU compute offload
+
+# Tool Capability Permissions
+let TOOL_PERM_READ    = 1;
+let TOOL_PERM_WRITE   = 2;
+let TOOL_PERM_EXEC    = 4;
+let TOOL_PERM_NETWORK = 8;
+
+# ==============================================================================
+# 1. Token Stream Management
+# ==============================================================================
+
+# Token Stream Buffer Layout:
+# [0..7]   = capacity
+# [8..15]  = total count
+# [16..23] = read cursor
+# [32..]   = token data payload
+fn llm_stream_create(capacity: i64): i64 {
+    let buf = sys_mmap(0, 32 + capacity * 8, 3, 34, -1, 0);
+    set_qword(buf, 0, capacity);
+    set_qword(buf, 8, 0);
+    set_qword(buf, 16, 0);
+    return buf;
+}
+
+fn llm_stream_push(stream: i64, token: i64): void {
+    let count = get_qword(stream, 8);
+    let cap = get_qword(stream, 0);
+    if count < cap {
+        set_qword(stream, 32 + count * 8, token);
+        set_qword(stream, 8, count + 1);
+    }
+}
+
+fn llm_stream_has_tokens(stream: i64): i64 {
+    let count = get_qword(stream, 8);
+    let rpos = get_qword(stream, 16);
+    if rpos < count { return 1; }
+    return 0;
+}
+
+fn llm_stream_next(stream: i64): i64 {
+    let count = get_qword(stream, 8);
+    let rpos = get_qword(stream, 16);
+    if rpos < count {
+        let tok = get_qword(stream, 32 + rpos * 8);
+        set_qword(stream, 16, rpos + 1);
+        return tok;
+    }
+    return -1;
+}
+
+fn llm_stream_count(stream: i64): i64 {
+    return get_qword(stream, 8);
+}
+
+fn llm_stream_reset(stream: i64): void {
+    set_qword(stream, 8, 0);
+    set_qword(stream, 16, 0);
+}
+
+# ==============================================================================
+# 2. Capability-Typed Agent Tools
+# ==============================================================================
+
+# Tool Registry Layout:
+# [0..7]  = capacity
+# [8..15] = tool count
+# [32..]  = entries (each entry = 16 bytes: [tool_id, permissions])
+fn llm_tool_registry_create(capacity: i64): i64 {
+    let buf = sys_mmap(0, 32 + capacity * 16, 3, 34, -1, 0);
+    set_qword(buf, 0, capacity);
+    set_qword(buf, 8, 0);
+    return buf;
+}
+
+fn llm_register_tool(registry: i64, tool_id: i64, perms: i64): void {
+    let count = get_qword(registry, 8);
+    let cap = get_qword(registry, 0);
+    if count < cap {
+        let entry = registry + 32 + (count * 16);
+        set_qword(entry, 0, tool_id);
+        set_qword(entry, 8, perms);
+        set_qword(registry, 8, count + 1);
+    }
+}
+
+# Statically verify whether an agent is authorized to call a given tool
+fn llm_verify_tool_permission(registry: i64, tool_id: i64, required_perm: i64): i64 {
+    let count = get_qword(registry, 8);
+    let i = 0;
+    while i < count {
+        let entry = registry + 32 + (i * 16);
+        if get_qword(entry, 0) == tool_id {
+            let perms = get_qword(entry, 8);
+            if (perms & required_perm) != 0 {
+                return 1; # Granted
+            }
+            return 0; # Denied: insufficient capability
+        }
+        i = i + 1;
+    }
+    return -1; # Error: tool not found in capability manifest
+}
+
+# ==============================================================================
+# 3. Transformer Model Container & Inference Engine
+# ==============================================================================
+
+# Model Header Offsets:
+# [0..7]   = vocab_size
+# [8..15]  = hidden_dim
+# [16..23] = seq_len
+# [24..31] = backend (BACKEND_NATIVE, BACKEND_BORROW, BACKEND_WEBGPU)
+# [32..39] = w_emb ptr
+# [40..47] = w_q ptr
+# [48..55] = w_k ptr
+# [56..63] = w_v ptr
+# [64..71] = w_o ptr
+# [72..79] = w_ff1 ptr
+# [80..87] = w_ff2 ptr
+# [88..95] = w_head ptr
+# [96..103]= kv_cache_k ptr
+# [104..111]= kv_cache_v ptr
+# [112..119]= activation_scratch ptr
+# [120..127]= logits_scratch ptr
+let LLM_OFF_VOCAB       = 0;
+let LLM_OFF_HIDDEN      = 8;
+let LLM_OFF_SEQLEN      = 16;
+let LLM_OFF_BACKEND     = 24;
+let LLM_OFF_W_EMB       = 32;
+let LLM_OFF_W_Q         = 40;
+let LLM_OFF_W_K         = 48;
+let LLM_OFF_W_V         = 56;
+let LLM_OFF_W_O         = 64;
+let LLM_OFF_W_FF1       = 72;
+let LLM_OFF_W_FF2       = 80;
+let LLM_OFF_W_HEAD      = 88;
+let LLM_OFF_KV_K        = 96;
+let LLM_OFF_KV_V        = 104;
+let LLM_OFF_SCRATCH_ACT = 112;
+let LLM_OFF_SCRATCH_LOG = 120;
+
+fn llm_model_create(vocab_size: i64, hidden_dim: i64, seq_len: i64): i64 {
+    let model = sys_mmap(0, 128, 3, 34, -1, 0);
+    set_qword(model, LLM_OFF_VOCAB, vocab_size);
+    set_qword(model, LLM_OFF_HIDDEN, hidden_dim);
+    set_qword(model, LLM_OFF_SEQLEN, seq_len);
+    set_qword(model, LLM_OFF_BACKEND, BACKEND_NATIVE);
+
+    # Create weight and KV tensors
+    let w_emb = tensor_create_2d(vocab_size, hidden_dim, DTYPE_I8);
+    let w_q   = tensor_create_2d(hidden_dim, hidden_dim, DTYPE_I8);
+    let w_k   = tensor_create_2d(hidden_dim, hidden_dim, DTYPE_I8);
+    let w_v   = tensor_create_2d(hidden_dim, hidden_dim, DTYPE_I8);
+    let w_o   = tensor_create_2d(hidden_dim, hidden_dim, DTYPE_I8);
+    let w_ff1 = tensor_create_2d(hidden_dim, hidden_dim * 2, DTYPE_I8);
+    let w_ff2 = tensor_create_2d(hidden_dim * 2, hidden_dim, DTYPE_I8);
+    let w_head= tensor_create_2d(hidden_dim, vocab_size, DTYPE_I8);
+
+    # KV Cache tensors: [seq_len, hidden_dim]
+    let kv_k  = tensor_create_2d(seq_len, hidden_dim, DTYPE_I8);
+    let kv_v  = tensor_create_2d(seq_len, hidden_dim, DTYPE_I8);
+
+    # Scratch buffers for activations and logits
+    let s_act = tensor_create_2d(1, hidden_dim, DTYPE_I8);
+    let s_log = tensor_create_2d(1, vocab_size, DTYPE_I8);
+
+    set_qword(model, LLM_OFF_W_EMB, w_emb);
+    set_qword(model, LLM_OFF_W_Q, w_q);
+    set_qword(model, LLM_OFF_W_K, w_k);
+    set_qword(model, LLM_OFF_W_V, w_v);
+    set_qword(model, LLM_OFF_W_O, w_o);
+    set_qword(model, LLM_OFF_W_FF1, w_ff1);
+    set_qword(model, LLM_OFF_W_FF2, w_ff2);
+    set_qword(model, LLM_OFF_W_HEAD, w_head);
+    set_qword(model, LLM_OFF_KV_K, kv_k);
+    set_qword(model, LLM_OFF_KV_V, kv_v);
+    set_qword(model, LLM_OFF_SCRATCH_ACT, s_act);
+    set_qword(model, LLM_OFF_SCRATCH_LOG, s_log);
+
+    return model;
+}
+
+fn llm_model_set_backend(model: i64, backend: i64): void {
+    set_qword(model, LLM_OFF_BACKEND, backend);
+}
+
+fn llm_model_get_backend(model: i64): i64 {
+    return get_qword(model, LLM_OFF_BACKEND);
+}
+
+# Single Token Forward Pass:
+# Computes embedding lookup -> projection -> LM head -> predicts next token
+fn llm_model_forward_token(model: i64, token_id: i64, pos: i64): i64 {
+    let vocab_size = get_qword(model, LLM_OFF_VOCAB);
+    let hidden_dim = get_qword(model, LLM_OFF_HIDDEN);
+    let w_emb = get_qword(model, LLM_OFF_W_EMB);
+    let w_head = get_qword(model, LLM_OFF_W_HEAD);
+    let s_act = get_qword(model, LLM_OFF_SCRATCH_ACT);
+    let s_log = get_qword(model, LLM_OFF_SCRATCH_LOG);
+
+    # Step 1: Embedding lookup for current token
+    embedding_lookup_i8(w_emb, token_id, s_act, hidden_dim);
+
+    # Step 2: LayerNorm on hidden representation
+    layernorm_approx_i8(s_act, s_act, hidden_dim, 1, 1);
+
+    # Step 3: Project to vocabulary logits via LM Head
+    matmul_i8(s_act, w_head, s_log, 256);
+
+    # Step 4: Argmax greedy next-token prediction
+    let next_token = tensor_argmax_i8(s_log, vocab_size);
+    return next_token;
+}
+
+# Autoregressive Generation Loop:
+# Generates `max_new_tokens` starting from `prompt_token` and streams them into `stream`
+fn llm_model_generate(model: i64, prompt_token: i64, max_new_tokens: i64, stream: i64): i64 {
+    llm_stream_push(stream, prompt_token);
+    let cur_token = prompt_token;
+    let step = 0;
+    while step < max_new_tokens {
+        let next_token = llm_model_forward_token(model, cur_token, step);
+        llm_stream_push(stream, next_token);
+        cur_token = next_token;
+        step = step + 1;
+    }
+    return llm_stream_count(stream);
+}

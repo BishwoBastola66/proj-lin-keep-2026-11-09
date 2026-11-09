@@ -1,0 +1,44 @@
+# ==============================================================================
+# Rubix — Automated Escape Analysis & Stack Promotion
+# File: compiler/middle/escape_analysis.bix
+#
+# Analyzes lifetime boundaries of allocations:
+#   - Non-escaping allocations are promoted to zero-cost Stack Frames / Local Bump Arenas.
+#   - Escaping allocations are preserved as affine heap handles.
+# ==============================================================================
+
+let ESCAPE_NONE    = 0; # Statically proven non-escaping (promoted to stack)
+let ESCAPE_REGION  = 1; # Bounded to active lexical region arena
+let ESCAPE_GLOBAL  = 2; # Escapes through return or global storage (heap affine)
+
+# Inspects an AIR buffer and performs escape analysis over resource IDs
+fn air_analyze_escapes(air_buf: i64, ret_reg: i64): i64 {
+    let count = air_get_count(air_buf);
+    let promoted_count = 0;
+    let i = 0;
+
+    while i < count {
+        let op = air_get_op(air_buf, i);
+        let dst = air_get_dst(air_buf, i);
+        let res_id = air_get_res_id(air_buf, i);
+
+        if res_id > 0 {
+            # Check if this resource register flows into ret_reg
+            if dst == ret_reg {
+                # Escapes through function return boundary!
+                # Keep as heap allocation
+            } else {
+                # Non-escaping! Promote to stack frame or local arena
+                if op == AIR_OP_MOVE {
+                    # Mark instruction as stack-promoted
+                    let addr = air_buf + 64 + (i * 48);
+                    set_qword(addr, 0, AIR_OP_STACK_PROMOTE);
+                    promoted_count = promoted_count + 1;
+                }
+            }
+        }
+        i = i + 1;
+    }
+
+    return promoted_count;
+}

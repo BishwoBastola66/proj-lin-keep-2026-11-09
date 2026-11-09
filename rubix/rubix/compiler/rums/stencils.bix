@@ -1,0 +1,211 @@
+# stencils.bix - Pre-computed verified machine stencils for ZWNS / HSNS Fast Lane
+# Direct O(1) bitwise hole patching for x86-64, ARM64, and RISC-V 64 targets.
+
+# Stencil ID Constants
+let STENCIL_X86_PROLOGUE_FRAME   = 1;
+let STENCIL_X86_EPILOGUE_FRAME   = 2;
+let STENCIL_X86_RET_IMM32        = 3;
+let STENCIL_X86_RET_REG          = 4;
+let STENCIL_X86_ADD_REG          = 5;
+let STENCIL_X86_SUB_REG          = 6;
+let STENCIL_X86_MOV_REG          = 7;
+let STENCIL_X86_CMOV_LESS        = 8;  # BSIS: Branchless conditional selection
+let STENCIL_X86_CMOV_EQUAL       = 9;  # BSIS: Branchless conditional selection
+let STENCIL_X86_STARTUP_MINIMAL  = 10; # DDZRE: Minimal Linux _start stub
+let STENCIL_X86_ATOMIC_BUMP      = 11; # LFAR-ESB: Lock-Free Atomic Bump
+let STENCIL_X86_BREAKPOINT_PROBE = 12; # DATP-SQP: Debug-Aware Trap Probe
+let STENCIL_X86_GOTPCRELX_RELAX  = 13; # TRNM-SDE: GOTPCRELX Relaxation
+let STENCIL_ARM64_ISB_BARRIER    = 14; # AR-CSP: Cross-Core ISB Invalidation
+let STENCIL_X86_STACK_PROBE      = 15; # ZC-SP: Stack-Clash Guard Probe
+
+# ------------------------------------------------------------------------------
+# Stencil Emission: x86-64
+# ------------------------------------------------------------------------------
+
+# Emits minimal Linux _start stub (28 bytes)
+# xor rbp, rbp; mov rdi, [rsp]; lea rsi, [rsp+8]; call main; mov rdi, rax; mov eax, 60; syscall
+fn stencil_emit_x86_startup_minimal(buf: i64, cur: i64, main_disp32: i64): i64 {
+    let p = cur;
+    # xor rbp, rbp (48 31 ED)
+    set_byte(buf, p + 0, 72); set_byte(buf, p + 1, 49); set_byte(buf, p + 2, 237);
+    # mov rdi, [rsp] (48 8B 3C 24)
+    set_byte(buf, p + 3, 72); set_byte(buf, p + 4, 139); set_byte(buf, p + 5, 60); set_byte(buf, p + 6, 36);
+    # lea rsi, [rsp+8] (48 8D 74 24 08)
+    set_byte(buf, p + 7, 72); set_byte(buf, p + 8, 141); set_byte(buf, p + 9, 116); set_byte(buf, p + 10, 36); set_byte(buf, p + 11, 8);
+    # call rel32 (E8 disp32)
+    set_byte(buf, p + 12, 232);
+    let d = main_disp32;
+    if d < 0 { d = d + 4294967296; }
+    set_byte(buf, p + 13, d & 255);
+    set_byte(buf, p + 14, (d >> 8) & 255);
+    set_byte(buf, p + 15, (d >> 16) & 255);
+    set_byte(buf, p + 16, (d >> 24) & 255);
+    # mov rdi, rax (48 89 C7)
+    set_byte(buf, p + 17, 72); set_byte(buf, p + 18, 137); set_byte(buf, p + 19, 199);
+    # mov eax, 60 (B8 3C 00 00 00)
+    set_byte(buf, p + 20, 184); set_byte(buf, p + 21, 60); set_byte(buf, p + 22, 0); set_byte(buf, p + 23, 0); set_byte(buf, p + 24, 0);
+    # syscall (0F 05)
+    set_byte(buf, p + 25, 15); set_byte(buf, p + 26, 5);
+    return p + 27;
+}
+
+# Emits function prologue with frame allocation (push rbp; mov rbp, rsp; sub rsp, frame_sz)
+fn stencil_emit_x86_prologue(buf: i64, cur: i64, frame_bytes: i64): i64 {
+    let p = cur;
+    # push rbp (55)
+    set_byte(buf, p, 85); p = p + 1;
+    # mov rbp, rsp (48 89 E5)
+    set_byte(buf, p + 0, 72); set_byte(buf, p + 1, 137); set_byte(buf, p + 2, 229); p = p + 3;
+    if frame_bytes > 0 {
+        # sub rsp, imm32 (48 81 EC imm32)
+        set_byte(buf, p + 0, 72); set_byte(buf, p + 1, 129); set_byte(buf, p + 2, 236); p = p + 3;
+        set_byte(buf, p + 0, frame_bytes & 255);
+        set_byte(buf, p + 1, (frame_bytes >> 8) & 255);
+        set_byte(buf, p + 2, (frame_bytes >> 16) & 255);
+        set_byte(buf, p + 3, (frame_bytes >> 24) & 255);
+        p = p + 4;
+    }
+    return p;
+}
+
+# Emits function epilogue with frame deallocation (mov rsp, rbp; pop rbp; ret)
+fn stencil_emit_x86_epilogue(buf: i64, cur: i64, frame_bytes: i64): i64 {
+    let p = cur;
+    if frame_bytes > 0 {
+        # mov rsp, rbp (48 89 EC)
+        set_byte(buf, p + 0, 72); set_byte(buf, p + 1, 137); set_byte(buf, p + 2, 236); p = p + 3;
+    }
+    # pop rbp (5D)
+    set_byte(buf, p, 93); p = p + 1;
+    # ret (C3)
+    set_byte(buf, p, 195); p = p + 1;
+    return p;
+}
+
+# Emits immediate return: mov rax, imm32; ret
+fn stencil_emit_x86_ret_imm32(buf: i64, cur: i64, imm32: i64): i64 {
+    let p = cur;
+    # mov rax, imm32 (48 C7 C0 imm32)
+    set_byte(buf, p + 0, 72); set_byte(buf, p + 1, 199); set_byte(buf, p + 2, 192); p = p + 3;
+    let v = imm32;
+    if v < 0 { v = v + 4294967296; }
+    set_byte(buf, p + 0, v & 255);
+    set_byte(buf, p + 1, (v >> 8) & 255);
+    set_byte(buf, p + 2, (v >> 16) & 255);
+    set_byte(buf, p + 3, (v >> 24) & 255);
+    p = p + 4;
+    # ret (C3)
+    set_byte(buf, p, 195); p = p + 1;
+    return p;
+}
+
+# BSIS Vector 5: Emits branchless conditional move (cmovl dst, src)
+# Opcode: 48 0F 4C /r
+fn stencil_emit_x86_cmov_less(buf: i64, cur: i64, dst_reg: i64, src_reg: i64): i64 {
+    let p = cur;
+    let rex = 72; # 0x48
+    if (dst_reg >= 8) { rex = rex | 4; }
+    if (src_reg >= 8) { rex = rex | 1; }
+    set_byte(buf, p, rex); p = p + 1;
+    set_byte(buf, p + 0, 15); set_byte(buf, p + 1, 76); p = p + 2; # 0F 4C
+    let modrm = 192 | ((dst_reg & 7) << 3) | (src_reg & 7); # 11_dst_src
+    set_byte(buf, p, modrm); p = p + 1;
+    return p;
+}
+
+# BSIS Vector 5: Emits branchless conditional move (cmove dst, src)
+# Opcode: 48 0F 44 /r
+fn stencil_emit_x86_cmov_equal(buf: i64, cur: i64, dst_reg: i64, src_reg: i64): i64 {
+    let p = cur;
+    let rex = 72;
+    if (dst_reg >= 8) { rex = rex | 4; }
+    if (src_reg >= 8) { rex = rex | 1; }
+    set_byte(buf, p, rex); p = p + 1;
+    set_byte(buf, p + 0, 15); set_byte(buf, p + 1, 68); p = p + 2; # 0F 44
+    let modrm = 192 | ((dst_reg & 7) << 3) | (src_reg & 7);
+    set_byte(buf, p, modrm); p = p + 1;
+    return p;
+}
+
+# BSIS Vector 5: Emits branchless conditional move (cmovnz dst, src)
+# Opcode: 48 0F 45 /r
+fn stencil_emit_x86_cmov_nonzero(buf: i64, cur: i64, dst_reg: i64, src_reg: i64): i64 {
+    let p = cur;
+    let rex = 72;
+    if (dst_reg >= 8) { rex = rex | 4; }
+    if (src_reg >= 8) { rex = rex | 1; }
+    set_byte(buf, p, rex); p = p + 1;
+    set_byte(buf, p + 0, 15); set_byte(buf, p + 1, 69); p = p + 2; # 0F 45
+    let modrm = 192 | ((dst_reg & 7) << 3) | (src_reg & 7);
+    set_byte(buf, p, modrm); p = p + 1;
+    return p;
+}
+
+# LFAR-ESB Trap 15: Lock-Free Atomic Hardware Bump (lock xadd [rdi], rax)
+# Opcode: F0 48 0F C1 07
+fn stencil_emit_x86_atomic_bump(buf: i64, cur: i64): i64 {
+    let p = cur;
+    set_byte(buf, p + 0, 240); # LOCK prefix (0xF0)
+    set_byte(buf, p + 1, 72);  # REX.W (0x48)
+    set_byte(buf, p + 2, 15);  # 0x0F
+    set_byte(buf, p + 3, 193); # XADD (0xC1)
+    set_byte(buf, p + 4, 7);   # ModR/M [rdi], rax (0x07)
+    return p + 5;
+}
+
+# DATP-SQP Trap 16: Software Breakpoint INT3 (0xCC) Probe & Preservation
+# Reads byte at address in rsi; compares against 0xCC (INT3)
+# Opcode: 80 3E CC
+fn stencil_emit_x86_breakpoint_probe(buf: i64, cur: i64): i64 {
+    let p = cur;
+    set_byte(buf, p + 0, 128); # cmp byte (0x80)
+    set_byte(buf, p + 1, 62);  # ModR/M [rsi] (0x3E)
+    set_byte(buf, p + 2, 204); # 0xCC (INT3)
+    return p + 3;
+}
+
+# TRNM-SDE Trap 14: GOTPCRELX Relaxation: lea rax, [rip + disp32]
+# Replaces indirect mov rax, [rip + disp32] when delta fits in signed 32-bit
+# Opcode: 48 8D 05 disp32
+fn stencil_emit_x86_gotpcrelx_relaxation(buf: i64, cur: i64, disp32: i64): i64 {
+    let p = cur;
+    set_byte(buf, p + 0, 72);  # REX.W (0x48)
+    set_byte(buf, p + 1, 141); # LEA (0x8D)
+    set_byte(buf, p + 2, 5);   # [rip + disp32] (0x05)
+    let d = disp32;
+    if d < 0 { d = d + 4294967296; }
+    set_byte(buf, p + 3, d & 255);
+    set_byte(buf, p + 4, (d >> 8) & 255);
+    set_byte(buf, p + 5, (d >> 16) & 255);
+    set_byte(buf, p + 6, (d >> 24) & 255);
+    return p + 7;
+}
+
+# AR-CSP Trap 11: ARM64 Instruction Synchronization Barrier (ISB)
+# Ensures cross-core invalidation broadcasts are synchronized before fetching code
+# Opcode: D5033FDF
+fn stencil_emit_arm64_isb_barrier(buf: i64, cur: i64): i64 {
+    let p = cur;
+    set_byte(buf, p + 0, 223); # 0xDF
+    set_byte(buf, p + 1, 63);  # 0x3F
+    set_byte(buf, p + 2, 3);   # 0x03
+    set_byte(buf, p + 3, 213); # 0xD5
+    return p + 4;
+}
+
+# ZC-SP Trap 12: Stack Overflow / Clash Probe
+# Probes 4KB guard boundary before stack allocation: test [rsp - 4096], eax
+# Opcode: 85 84 24 00 F0 FF FF
+fn stencil_emit_x86_stack_probe(buf: i64, cur: i64): i64 {
+    let p = cur;
+    set_byte(buf, p + 0, 133); # test (0x85)
+    set_byte(buf, p + 1, 132); # ModR/M disp32 SIB (0x84)
+    set_byte(buf, p + 2, 36);  # SIB: rsp (0x24)
+    # disp32 = -4096 (0xFFFFF000 in little-endian: 00 F0 FF FF)
+    set_byte(buf, p + 3, 0);
+    set_byte(buf, p + 4, 240);
+    set_byte(buf, p + 5, 255);
+    set_byte(buf, p + 6, 255);
+    return p + 7;
+}
+

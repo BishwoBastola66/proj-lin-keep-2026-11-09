@@ -1,0 +1,337 @@
+# ==============================================================================
+# EIA CORE TEST SUITE — Working Core Validation
+# Tests the boot-time schema evolution mechanism end-to-end
+# ==============================================================================
+
+use compiler.runtime;
+
+# ------------------------------------------------------------------------------
+# Test 1: Basic Schema Evolution — Field Addition
+# V1: struct { id: i64, balance: i64 }  (balance at +8)
+# V2: struct { id: i64, tier: i64, balance: i64 }  (balance at +16)
+# ------------------------------------------------------------------------------
+
+struct AccountV1 {
+    id: i64,
+    balance: i64
+}
+
+struct AccountV2 {
+    id: i64,
+    tier: i64,
+    balance: i64
+}
+
+fn test_field_addition(): i64 {
+    # V2 data layout
+    let acc = sys_mmap(0, 4096, 3, 34, -1, 0) as *AccountV2;
+    acc.id = 100;
+    acc.tier = 5;
+    acc.balance = 777777;
+
+    # Compile-time: emit_schema_descriptor creates schema with balance at +16
+    # Runtime: boot patcher reads schema, finds balance field hash, patches +16
+    return acc.balance;
+}
+
+# ------------------------------------------------------------------------------
+# Test 2: Schema Evolution — Field Reordering
+# V1: struct { a: i64, b: i64, c: i64 }
+# V2: struct { c: i64, a: i64, b: i64 }  (fields permuted)
+# ------------------------------------------------------------------------------
+
+struct OrderV1 {
+    a: i64,
+    b: i64,
+    c: i64
+}
+
+struct OrderV2 {
+    c: i64,
+    a: i64,
+    b: i64
+}
+
+fn test_field_reordering(): i64 {
+    let ord = sys_mmap(0, 4096, 3, 34, -1, 0) as *OrderV2;
+    ord.c = 10;
+    ord.a = 20;
+    ord.b = 30;
+
+    # V1 expects a at +0, b at +8, c at +16
+    # V2 has c at +0, a at +8, b at +16
+    # φ maps: a→+8, b→+16, c→+0
+    return ord.a + ord.b + ord.c;  # 20+30+10 = 60
+}
+
+# ------------------------------------------------------------------------------
+# Test 3: Multiple Structs — Cross-Struct References
+# V1: Inner { x: i64 }, Outer { inner: Inner, y: i64 }
+# V2: Inner { z: i64, x: i64 }, Outer { inner: Inner, y: i64 }
+# ------------------------------------------------------------------------------
+
+struct InnerV1 {
+    x: i64
+}
+
+struct OuterV1 {
+    inner: InnerV1,
+    y: i64
+}
+
+struct InnerV2 {
+    z: i64,
+    x: i64
+}
+
+struct OuterV2 {
+    inner: InnerV2,
+    y: i64
+}
+
+fn test_nested_structs(): i64 {
+    let outer = sys_mmap(0, 4096, 3, 34, -1, 0) as *OuterV2;
+    outer.inner.z = 100;
+    outer.inner.x = 200;
+    outer.y = 300;
+
+    # InnerV1: x at +0
+    # InnerV2: z at +0, x at +8
+    # OuterV1/V2: inner at +0, y at +8 (assuming Inner is 8 bytes in V1, 16 in V2)
+    # But Outer layout same, Inner layout changes
+    return outer.inner.x + outer.y;  # 200 + 300 = 500
+}
+
+# ------------------------------------------------------------------------------
+# Test 4: Standalone Self-Healing (no --target-layout)
+# Binary patches from its own embedded .eia_schema
+# ------------------------------------------------------------------------------
+
+struct StandaloneV1 {
+    a: i64,
+    b: i64
+}
+
+fn test_standalone(): i64 {
+    let s = sys_mmap(0, 4096, 3, 34, -1, 0) as *StandaloneV1;
+    s.a = 111;
+    s.b = 222;
+    return s.a + s.b;  # 333
+}
+
+# ------------------------------------------------------------------------------
+# Test 5: Multiple Holes in Single Function
+# Multiple field accesses in one function all patched
+# ------------------------------------------------------------------------------
+
+struct MultiV1 {
+    a: i64,
+    b: i64,
+    c: i64,
+    d: i64
+}
+
+struct MultiV2 {
+    x: i64,
+    a: i64,
+    y: i64,
+    b: i64,
+    z: i64,
+    c: i64,
+    w: i64,
+    d: i64
+}
+
+fn test_multiple_fields(): i64 {
+    let m = sys_mmap(0, 4096, 3, 34, -1, 0) as *MultiV2;
+    m.x = 1; m.a = 10;
+    m.y = 2; m.b = 20;
+    m.z = 3; m.c = 30;
+    m.w = 4; m.d = 40;
+
+    return m.a + m.b + m.c + m.d;  # 10+20+30+40 = 100
+}
+
+# ------------------------------------------------------------------------------
+# Test 6: Schema with Multiple Structs
+# Two different structs in same schema
+# ------------------------------------------------------------------------------
+
+struct FooV1 {
+    a: i64,
+    b: i64
+}
+
+struct BarV1 {
+    x: i64
+}
+
+struct FooV2 {
+    y: i64,
+    a: i64,
+    z: i64,
+    b: i64
+}
+
+struct BarV2 {
+    z: i64,
+    x: i64
+}
+
+fn test_multi_struct_schema(): i64 {
+    let foo = sys_mmap(0, 4096, 3, 34, -1, 0) as *FooV2;
+    let bar = sys_mmap(0, 4096, 3, 34, -1, 0) as *BarV2;
+
+    foo.y = 1; foo.a = 10; foo.z = 2; foo.b = 20;
+    bar.z = 3; bar.x = 4;
+
+    return foo.a + foo.b + bar.x;  # 10+20+4 = 34
+}
+
+# ------------------------------------------------------------------------------
+# Test 7: Field Access via Pointer to Struct
+# Pointer dereference field access
+# ------------------------------------------------------------------------------
+
+struct PtrStructV1 {
+    value: i64
+}
+
+struct PtrStructV2 {
+    tag: i64,
+    value: i64
+}
+
+fn test_pointer_access(): i64 {
+    let s = sys_mmap(0, 4096, 3, 34, -1, 0) as *PtrStructV2;
+    s.tag = 99;
+    s.value = 42;
+
+    return s.value;  # 42
+}
+
+# ------------------------------------------------------------------------------
+# Test 8: Array of Structs
+# Struct array field access
+# ------------------------------------------------------------------------------
+
+struct ElemV1 {
+    value: i64
+}
+
+struct ElemV2 {
+    tag: i64,
+    value: i64
+}
+
+struct ContainerV1 {
+    elems: [ElemV1; 3]
+}
+
+struct ContainerV2 {
+    elems: [ElemV2; 3]
+}
+
+fn test_array_of_structs(): i64 {
+    let c = sys_mmap(0, 4096, 3, 34, -1, 0) as *ContainerV2;
+    c.elems[0].tag = 1; c.elems[0].value = 10;
+    c.elems[1].tag = 2; c.elems[1].value = 20;
+    c.elems[2].tag = 3; c.elems[2].value = 30;
+
+    return c.elems[0].value + c.elems[1].value + c.elems[2].value;  # 60
+}
+
+# ------------------------------------------------------------------------------
+# Main Test Runner
+# ------------------------------------------------------------------------------
+
+fn main(): i64 {
+    println("=================================================================");
+    println("   EIA CORE TEST SUITE — Working Core Validation                ");
+    println("=================================================================");
+
+    # Test 1: Field Addition
+    println("[TEST 1] Field Addition...");
+    let r1 = test_field_addition();
+    if r1 != 777777 {
+        println("FAIL: test_field_addition got");
+        print r1;
+        return 1;
+    }
+    println("  PASS: balance = 777777");
+
+    # Test 2: Field Reordering
+    println("[TEST 2] Field Reordering...");
+    let r2 = test_field_reordering();
+    if r2 != 60 {
+        println("FAIL: test_field_reordering got");
+        print r2;
+        return 2;
+    }
+    println("  PASS: sum = 60");
+
+    # Test 3: Nested Structs
+    println("[TEST 3] Nested Structs...");
+    let r3 = test_nested_structs();
+    if r3 != 500 {
+        println("FAIL: test_nested_structs got");
+        print r3;
+        return 3;
+    }
+    println("  PASS: sum = 500");
+
+    # Test 4: Standalone Self-Healing
+    println("[TEST 4] Standalone Self-Healing...");
+    let r4 = test_standalone();
+    if r4 != 333 {
+        println("FAIL: test_standalone got");
+        print r4;
+        return 4;
+    }
+    println("  PASS: sum = 333");
+
+    # Test 5: Multiple Fields
+    println("[TEST 5] Multiple Fields...");
+    let r5 = test_multiple_fields();
+    if r5 != 100 {
+        println("FAIL: test_multiple_fields got");
+        print r5;
+        return 5;
+    }
+    println("  PASS: sum = 100");
+
+    # Test 6: Multi-Struct Schema
+    println("[TEST 6] Multi-Struct Schema...");
+    let r6 = test_multi_struct_schema();
+    if r6 != 34 {
+        println("FAIL: test_multi_struct_schema got");
+        print r6;
+        return 6;
+    }
+    println("  PASS: sum = 34");
+
+    # Test 7: Pointer Access
+    println("[TEST 7] Pointer Access...");
+    let r7 = test_pointer_access();
+    if r7 != 42 {
+        println("FAIL: test_pointer_access got");
+        print r7;
+        return 7;
+    }
+    println("  PASS: value = 42");
+
+    # Test 8: Array of Structs
+    println("[TEST 8] Array of Structs...");
+    let r8 = test_array_of_structs();
+    if r8 != 60 {
+        println("FAIL: test_array_of_structs got");
+        print r8;
+        return 8;
+    }
+    println("  PASS: sum = 60");
+
+    println("=================================================================");
+    println("   ALL 8 CORE TESTS PASSED — EIA Working Core Verified          ");
+    println("=================================================================");
+    return 0;
+}

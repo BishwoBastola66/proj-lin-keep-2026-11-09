@@ -1,0 +1,75 @@
+# ==============================================================================
+# Rubix — Affine Ownership & Borrow Checker
+# File: compiler/middle/borrow_checker.bix
+#
+# Validates:
+#   1. Single-ownership invariant.
+#   2. Prevention of Use-After-Move.
+#   3. Prevention of Use-After-Free (Drop).
+#   4. Aliasing XOR Mutability.
+# ==============================================================================
+
+let RES_STATE_VALID   = 1;
+let RES_STATE_MOVED   = 2;
+let RES_STATE_DROPPED = 3;
+
+let ERR_BORROW_OK             = 0;
+let ERR_USE_AFTER_MOVE        = -201;
+let ERR_USE_AFTER_DROP        = -202;
+let ERR_DOUBLE_DROP           = -203;
+
+# Validates an AIR instruction sequence for affine ownership violations
+fn air_check_ownership(air_buf: i64, state_table: i64, max_res: i64): i64 {
+    let count = air_get_count(air_buf);
+    let i = 0;
+
+    # Initialize all resources to VALID state
+    while i < max_res {
+        set_qword(state_table, i, RES_STATE_VALID);
+        i = i + 1;
+    }
+
+    i = 0;
+    while i < count {
+        let op = air_get_op(air_buf, i);
+        let s1 = air_get_src1(air_buf, i);
+        let res_id = air_get_res_id(air_buf, i);
+
+        if (res_id >= 0) & (res_id < max_res) {
+            let current_state = get_qword(state_table, res_id);
+
+            # If attempting to use or borrow a resource
+            if (op == AIR_OP_BORROW) | (op == AIR_OP_CALL) {
+                if current_state == RES_STATE_MOVED {
+                    return ERR_USE_AFTER_MOVE;
+                }
+                if current_state == RES_STATE_DROPPED {
+                    return ERR_USE_AFTER_DROP;
+                }
+            }
+
+            # If moving a resource
+            if op == AIR_OP_MOVE {
+                if current_state == RES_STATE_MOVED {
+                    return ERR_USE_AFTER_MOVE;
+                }
+                if current_state == RES_STATE_DROPPED {
+                    return ERR_USE_AFTER_DROP;
+                }
+                # Transition resource to MOVED state
+                set_qword(state_table, res_id, RES_STATE_MOVED);
+            }
+
+            # If dropping a resource
+            if op == AIR_OP_DROP {
+                if current_state == RES_STATE_DROPPED {
+                    return ERR_DOUBLE_DROP;
+                }
+                set_qword(state_table, res_id, RES_STATE_DROPPED);
+            }
+        }
+        i = i + 1;
+    }
+
+    return ERR_BORROW_OK;
+}

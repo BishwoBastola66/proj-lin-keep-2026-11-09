@@ -1,0 +1,16 @@
+# ==============================================================================
+# Rix — Package & Script Executor (src/executor.bix)
+# ==============================================================================
+
+# Locate executable binary inside a resolved package
+fn executor_binary_path(tool_name: String, packages_dir: String): String {
+    packages_dir + "/" + tool_name + "/bin/" + tool_name
+}
+
+# Construct full execution command with appended arguments
+fn executor_format_command(base_cmd: String, args: String): String {
+    if string_length(args) > 0 {
+        return base_cmd + " " + args
+    }
+    base_cmd
+}

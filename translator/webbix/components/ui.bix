@@ -1,0 +1,127 @@
+# ==============================================================================
+# Webbix Framework — High-Level Declarative UI Primitives
+# File: webbix/components/ui.bix
+#
+# Ergonomic, beginner-friendly UI component library for Rubix developers.
+# Provides 1-line semantic components with zero HTML tags and zero CSS rules.
+# ==============================================================================
+
+include "../ir/builder.bix";
+
+# ------------------------------------------------------------------------------
+# Navigation Bar Component
+# ------------------------------------------------------------------------------
+fn ui_navbar(
+    app: *WebApp,
+    parent: i64,
+    brand: str,
+    badge: str,
+    link1_text: str,
+    link1_url: str,
+    link2_text: str,
+    link2_url: str
+): i64 {
+    let nav = web_nav(app, parent, brand, badge);
+    web_nav_link(app, nav, link1_text, link1_url);
+    web_nav_link(app, nav, link2_text, link2_url);
+    return nav;
+}
+
+# ------------------------------------------------------------------------------
+# Hero Section Component
+# ------------------------------------------------------------------------------
+fn ui_hero(
+    app: *WebApp,
+    parent: i64,
+    eyebrow: str,
+    headline: str,
+    description: str,
+    cta_text: str,
+    cta_url: str,
+    cta_color: i64
+): i64 {
+    let hero = web_hero(app, parent, eyebrow);
+    web_title(app, hero, headline);
+    web_text(app, hero, description);
+    web_button_link(app, hero, cta_text, cta_url, cta_color);
+    return hero;
+}
+
+# ------------------------------------------------------------------------------
+# Interactive Action Button Component
+# ------------------------------------------------------------------------------
+fn ui_action_button(app: *WebApp, parent: i64, label: str, state_key_to_increment: i64): i64 {
+    let btn = web_button(app, parent, label);
+    web_on_click_increment(app, btn, state_key_to_increment);
+    return btn;
+}
+
+# ------------------------------------------------------------------------------
+# Responsive Statistics Grid Component
+# ------------------------------------------------------------------------------
+fn ui_stats_grid(app: *WebApp, parent: i64): i64 {
+    return web_stats_grid(app, parent);
+}
+
+fn ui_stat_reactive(app: *WebApp, stats_grid: i64, label: str, state_key: i64): i64 {
+    return web_stat_card(app, stats_grid, label, state_key);
+}
+
+fn ui_stat_metric(app: *WebApp, stats_grid: i64, label: str, metric_value: str, color: i64): i64 {
+    return web_stat_card_static(app, stats_grid, label, metric_value, color);
+}
+
+# ------------------------------------------------------------------------------
+# Semantic Section & Layout Grid Components
+# ------------------------------------------------------------------------------
+fn ui_section(app: *WebApp, parent: i64, title: str, subtitle: str): i64 {
+    return web_section(app, parent, title, subtitle);
+}
+
+fn ui_grid(app: *WebApp, parent: i64, columns: i64): i64 {
+    return web_grid(app, parent, columns);
+}
+
+# ------------------------------------------------------------------------------
+# Project / Feature Showcase Card
+# ------------------------------------------------------------------------------
+fn ui_project_card(
+    app: *WebApp,
+    grid: i64,
+    category: str,
+    title: str,
+    description: str,
+    tag_left: str,
+    tag_right: str
+): i64 {
+    return web_project_card(app, grid, category, title, description, tag_left, tag_right);
+}
+
+# ------------------------------------------------------------------------------
+# Skill / Badge Group Card
+# ------------------------------------------------------------------------------
+fn ui_badge_card(
+    app: *WebApp,
+    grid: i64,
+    title: str,
+    b1: str,
+    b2: str,
+    b3: str,
+    b4: str,
+    b5: str
+): i64 {
+    let card = web_card(app, grid, title);
+    web_badge(app, card, b1);
+    web_badge(app, card, b2);
+    web_badge(app, card, b3);
+    web_badge(app, card, b4);
+    web_badge(app, card, b5);
+    return card;
+}
+
+# ------------------------------------------------------------------------------
+# Footer Component
+# ------------------------------------------------------------------------------
+fn ui_footer(app: *WebApp, parent: i64, copyright: str): i64 {
+    return web_footer(app, parent, copyright);
+}

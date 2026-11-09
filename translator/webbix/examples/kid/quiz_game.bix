@@ -1,0 +1,7 @@
+use web
+page Quiz:
+    title "Rubix Trivia"
+    text "What is the fastest self-hosting language?"
+    button "Rubix" -> answer = "Correct"
+    button "Other" -> answer = "Try again"
+start Quiz

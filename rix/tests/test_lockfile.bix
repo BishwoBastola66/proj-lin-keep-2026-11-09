@@ -1,0 +1,36 @@
+# ==============================================================================
+# Rix Checks — Lockfile Test Suite (tests/test_lockfile.bix)
+# ==============================================================================
+
+fn check_lockfile_primitives(): Integer {
+    let hash1 = lockfile_compute_hash("webbix-1.0.0")
+    let hash2 = lockfile_compute_hash("webbix-1.0.0")
+    if hash1 != hash2 {
+        return 1 # hash must be deterministic
+    }
+    
+    let lock_text = lockfile_generate("my_app", "0.1.0", "webbix = { version = \"1.0.0\" }\n")
+    if string_length(lock_text) < 50 {
+        return 2
+    }
+    
+    if lockfile_verify_hash("rix-1234", "rix-1234") != 1 {
+        return 3
+    }
+    if lockfile_verify_hash("rix-1234", "rix-tampered") != 0 {
+        return 4
+    }
+    
+    0
+}
+
+fn main(): Integer {
+    print "Running Rix Check: Lockfile & Integrity..."
+    let status = check_lockfile_primitives()
+    if status != 0 {
+        print "  [FAIL] Lockfile check failed with code " + int_to_string(status)
+        return 1
+    }
+    print "  [PASS] Lockfile: deterministic hashing, generation, checksum verification"
+    0
+}

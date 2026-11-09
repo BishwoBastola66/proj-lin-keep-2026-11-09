@@ -1,0 +1,48 @@
+# ==============================================================================
+# Cloudflare Workers & Storage Topology Configuration (Rubix Library Registry)
+# File: library/wrangler.toml
+# ==============================================================================
+
+name = "rubix-library-gateway"
+main = "workers/scanner/index.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+REGISTRY_DOMAIN = "registry.rubix-lang.org"
+ALLOW_ANONYMOUS_READS = "true"
+
+# D1 Serverless SQL Database: Metadata, search index, author keys, versions
+[[d1_databases]]
+binding = "REGISTRY_DB"
+database_name = "rubix-registry"
+database_id = "00000000-0000-0000-0000-000000000001"
+migrations_dir = "db"
+
+# R2 Object Storage: Immutable Package Tarballs (.tar.gz)
+[[r2_buckets]]
+binding = "REGISTRY_BUCKET"
+bucket_name = "rubix-tarballs"
+preview_bucket_name = "rubix-tarballs-preview"
+
+# KV Namespaces: Hot metadata cache and sliding-window rate limiting
+[[kv_namespaces]]
+binding = "REGISTRY_KV"
+id = "00000000000000000000000000000001"
+preview_id = "00000000000000000000000000000002"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "00000000000000000000000000000003"
+preview_id = "00000000000000000000000000000004"
+
+# Cloudflare Queues: Asynchronous mirroring to GitHub Releases cold storage
+[[queues.producers]]
+binding = "GITHUB_MIRROR_QUEUE"
+queue = "rubix-github-mirror"
+
+# Routes
+[routes]
+pattern = "registry.rubix-lang.org/*"
+zone_name = "rubix-lang.org"

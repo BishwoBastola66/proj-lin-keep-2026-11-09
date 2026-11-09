@@ -1,0 +1,28 @@
+# ==============================================================================
+# Rubix Library API: Report Route (/v1/report)
+# File: library/api/src/routes/report.bix
+# ==============================================================================
+
+use std.core;
+use std.string;
+use std.json;
+
+fn api_handle_report(package_name: str, version: str, reason: str, details: str): str {
+    let lb = json_lbrace();
+    let rb = json_rbrace();
+
+    let enc_status = json_encode_str("accepted");
+    let enc_pkg = json_encode_str(package_name);
+    let enc_ver = json_encode_str(version);
+    let enc_reason = json_encode_str(reason);
+    let enc_ticket = json_encode_str("SEC-2026-" + package_name);
+
+    let part_status = json_build_pair("status", enc_status);
+    let part_pkg = json_build_pair("package", enc_pkg);
+    let part_ver = json_build_pair("version", enc_ver);
+    let part_reason = json_build_pair("reason", enc_reason);
+    let part_ticket = json_build_pair("ticket_id", enc_ticket);
+
+    let resp = lb + part_status + "," + part_pkg + "," + part_ver + "," + part_reason + "," + part_ticket + rb;
+    return resp;
+}

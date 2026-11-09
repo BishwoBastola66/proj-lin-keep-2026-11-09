@@ -1,0 +1,40 @@
+# ==============================================================================
+# Rubix Standard Library: Micro-Task Queue & Futures (std/async.bix)
+# Cooperative future scheduler and task pipeline execution.
+# ==============================================================================
+
+# Task states: 0: Pending, 1: Running, 2: Completed, 3: Failed
+
+struct Task {
+    id: i64,
+    state: i64,
+    result_val: i64
+}
+
+fn task_new(task_id: i64): *Task {
+    let t = alloc_buffer(24) as *Task;
+    t.id = task_id;
+    t.state = 0;
+    t.result_val = 0;
+    return t;
+}
+
+fn task_complete(t: *Task, result: i64): *Task {
+    t.state = 2;
+    t.result_val = result;
+    return t;
+}
+
+fn task_is_done(t: *Task): bool {
+    return t.state == 2;
+}
+
+fn task_get_result(t: *Task): i64 {
+    return t.result_val;
+}
+
+fn run_task_pipeline(t1: *Task, t2: *Task): i64 {
+    let t1_done = task_complete(t1, 100);
+    let t2_done = task_complete(t2, t1_done.result_val + 50);
+    return t2_done.result_val;
+}

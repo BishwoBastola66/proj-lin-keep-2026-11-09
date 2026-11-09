@@ -1,0 +1,23 @@
+# ==============================================================================
+# Store Page Route (routes/store.bix)
+# ==============================================================================
+
+include "webbix/webbix.bix";
+include "../state/store.bix";
+include "../components/navbar.bix";
+include "../components/cards.bix";
+include "../components/footer.bix";
+
+fn route_store_build(app: *App): void {
+    Page(app, "/store", "Store");
+        comp_navbar(app, "Webbix Store");
+        Section(app, "Online Store", "High-performance native components, tools, and developer assets.");
+            Grid(app, 3);
+                ProjectCard(app, "Webbix Core", "Native Web Framework", "Zero-dependency reactive web development framework.", "$49", "Instant Download");
+                ProjectCard(app, "Rubix Stage2", "Native Compiler Suite", "Self-hosting x86_64 compiler with zero runtime overhead.", "$99", "Developer License");
+                ProjectCard(app, "RCS Styling", "Motion & Style Engine", "Single cascade animation and token styling library.", "$29", "Production Ready");
+            End(app);
+        End(app);
+        comp_footer(app, "Built natively with Webbix & Rubix.");
+    End(app);
+}

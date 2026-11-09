@@ -1,0 +1,45 @@
+# ==============================================================================
+# Rubix Control Style (RCS) - Hero 3D Card Example
+# Declarative 3D depth and tilt without math matrices
+# ==============================================================================
+
+hero {
+    depth 2;
+    padding: 32px;
+    center;
+    slide up on load gentle;
+}
+
+card {
+    bg: surface;
+    border: 1px solid var(--border);
+    radius: 16px;
+    padding: 24px;
+    shadow: md;
+}
+
+card:hover {
+    tilt;
+    pop;
+}
+
+.title {
+    color: text;
+    size: 2xl;
+    weight: bold;
+}
+
+.desc {
+    color: var(--text-muted);
+    size: md;
+    fade in after 200ms;
+}
+
+button.primary {
+    bg: accent;
+    color: white;
+    radius: 10px;
+    padding: 10px 20px;
+    pop on hover;
+    glow accent on focus;
+}
